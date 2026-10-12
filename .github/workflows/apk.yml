@@ -30,10 +30,17 @@ jobs:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
           if [ ! -f lib/firebase_options.dart ]; then
-            API_KEY="${FIREBASE_API_KEY:-CI-STUB}"
-            APP_ID="${FIREBASE_APP_ID:-CI-STUB}"
-            SENDER_ID="${FIREBASE_MESSAGING_SENDER_ID:-CI-STUB}"
-            PROJECT_ID="${FIREBASE_PROJECT_ID:-CI-STUB}"
+            # Strip CR/LF/spaces: copy-paste from Windows often smuggles a
+            # newline into the secret, which breaks the Dart string literal.
+            API_KEY="$(printf '%s' "${FIREBASE_API_KEY:-CI-STUB}" | tr -d ' \t\r\n')"
+            APP_ID="$(printf '%s' "${FIREBASE_APP_ID:-CI-STUB}" | tr -d ' \t\r\n')"
+            SENDER_ID="$(printf '%s' "${FIREBASE_MESSAGING_SENDER_ID:-CI-STUB}" | tr -d ' \t\r\n')"
+            PROJECT_ID="$(printf '%s' "${FIREBASE_PROJECT_ID:-CI-STUB}" | tr -d ' \t\r\n')"
+            if [ -z "$API_KEY" ]; then API_KEY="CI-STUB"; fi
+            if [ -z "$APP_ID" ]; then APP_ID="CI-STUB"; fi
+            if [ -z "$SENDER_ID" ]; then SENDER_ID="CI-STUB"; fi
+            if [ -z "$PROJECT_ID" ]; then PROJECT_ID="CI-STUB"; fi
+            echo "Firebase config lengths: apiKey=${#API_KEY} appId=${#APP_ID} sender=${#SENDER_ID} project=${#PROJECT_ID}"
             cat > lib/firebase_options.dart <<EOF
             // Generated in CI from GitHub secrets (or CI-STUB offline fallback).
             import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
