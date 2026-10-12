@@ -79,6 +79,13 @@ class AuthStore extends ChangeNotifier {
   AuthUser? _user;
   bool _ready = false;
 
+  /// While true, the authStateChanges listener ignores events. Signup sets
+  /// this: creating a Firebase user signs it in immediately, but signup
+  /// must NOT grant app access — the session is dropped right after and
+  /// the user logs in explicitly. Without the guard the listener would
+  /// sync a profile for the transient session and flash the app open.
+  bool _ignoreAuthEvents = false;
+
   AuthUser? get user => _user;
   bool get isLoggedIn => FirebaseAuth.instance.currentUser != null && _user != null;
   bool get isReady => _ready;
@@ -133,6 +140,7 @@ class AuthStore extends ChangeNotifier {
 
       // Listen to Firebase auth state — fires immediately with current user.
       FirebaseAuth.instance.authStateChanges().listen((firebaseUser) async {
+        if (_ignoreAuthEvents) return;
         if (firebaseUser == null) {
           _user = null;
           await _clearPersisted();
@@ -198,46 +206,47 @@ class AuthStore extends ChangeNotifier {
     }
   }
 
-  /// Sign up with email + password via Firebase Auth, then create a DB row.
-  /// Signs the new account in immediately: [_user] is set, persisted, and
-  /// listeners (AuthGate) are notified, so the app opens without a second
-  /// login. The authStateChanges listener below may re-sync afterwards —
-  /// that is harmless.
-  Future<AuthUser> signup({
+  /// Sign up with email + password via Firebase Auth.
+  /// Deliberately does NOT sign the new account in: Firebase auto-signs
+  /// the created user, so the session is dropped immediately and the
+  /// caller routes back to Login. The DB row + seeds are created on the
+  /// first explicit login via firebase-sync. Returns the account email so
+  /// login can pre-fill it.
+  Future<String> signup({
     required String email,
     required String password,
     String name = '',
   }) async {
+    _ignoreAuthEvents = true;
     try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      // Brand-new Firebase identity: start from a clean device even if a
-      // previous account's data survived (upgrade path, missed logout).
-      await clearAccountData();
-      // Update the Firebase display name immediately.
-      if (name.isNotEmpty) {
-        await cred.user?.updateDisplayName(name.trim());
-      }
-      // Sync with backend to upsert the DB user row. If the backend is
-      // unreachable the Firebase account still exists, so fall back to a
-      // minimal profile rather than stranding the user logged-out.
-      AuthUser user;
       try {
-        user = await _syncProfile(cred.user!);
-      } catch (_) {
-        user = AuthUser(
-          id: cred.user!.uid,
-          email: cred.user!.email ?? email.trim(),
-          displayName: name.trim(),
+        final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
         );
+        // Brand-new Firebase identity: start from a clean device even if
+        // a previous account's data survived (upgrade path, missed logout).
+        await clearAccountData();
+        // Update the Firebase display name immediately.
+        if (name.isNotEmpty) {
+          await cred.user?.updateDisplayName(name.trim());
+        }
+        final address = (cred.user?.email ?? email).trim();
+        // Drop the auto-sign-in: no direct access to the app from signup.
+        try {
+          await FirebaseAuth.instance.signOut();
+        } catch (_) {}
+        try {
+          await GoogleSignIn().signOut();
+        } catch (_) {}
+        _user = null;
+        _ready = true;
+        await _clearPersisted();
+        notifyListeners();
+        return address;
+      } finally {
+        _ignoreAuthEvents = false;
       }
-      _user = user;
-      _ready = true;
-      await _persistUser();
-      notifyListeners();
-      return user;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
     } on AuthException {

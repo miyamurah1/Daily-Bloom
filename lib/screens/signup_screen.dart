@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/motion.dart';
@@ -42,21 +41,17 @@ class _SignupScreenState extends State<SignupScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _busy = true);
     try {
-      await AuthStore.instance.signup(
+      final address = await AuthStore.instance.signup(
         email: _email.text,
         password: _password.text,
         name: _name.text,
       );
-      // Pull the account's equipped skin (best-effort for a new account).
-      try {
-        await ThemeStore.instance.sync(() => BloomApi().fetchStore());
-      } catch (_) {}
       // Let the OS/browser offer to save the new credential now.
       TextInput.finishAutofillContext();
       if (mounted) {
-        // No email hand-back: the new account is already signed in, so
-        // AuthGate swaps to the app on its own — no second login wall.
-        Navigator.of(context).pop();
+        // No direct access from signup: hand the email back so login
+        // pre-fills it — the user signs in explicitly.
+        Navigator.of(context).pop(address);
       }
     } on AuthException catch (e) {
       setState(() => _error = e.message);
