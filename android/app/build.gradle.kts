@@ -33,10 +33,10 @@ android {
         applicationId = "com.dailybloom.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // 24, not flutter.minSdkVersion: flutter_local_notifications
-        // requires minSdk 24, and the merger fails the build otherwise.
-        // Android 7.0+ (2016) — negligible device loss in 2026.
-        minSdk = 24
+        // 26, not flutter.minSdkVersion: sentry_flutter 10 requires
+        // minSdk 26 (and flutter_local_notifications requires 24).
+        // Android 8.0+ (2017) — negligible device loss in 2026.
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
