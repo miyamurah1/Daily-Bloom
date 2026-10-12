@@ -15,8 +15,13 @@ import 'theme/sakura_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialise Firebase before anything else.
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Initialise Firebase before anything else. Guarded: without
+  // generated options (CI) or network, auth degrades to offline mode
+  // instead of killing startup.
+  try {
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+  } catch (_) {}
 
   // Paint the last-used theme before the first frame — no flash.
   await ThemeStore.instance.preload();
