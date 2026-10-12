@@ -25,7 +25,7 @@ dependencies:
   share_plus: ^13.3.1
   speech_to_text: ^7.5.0
   home_widget: ^0.10.0
-  sentry_flutter: ^8.14.2
+  sentry_flutter: 10.0.0
   audioplayers: ^6.8.1
 
 dev_dependencies:
