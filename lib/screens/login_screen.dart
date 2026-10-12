@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
@@ -43,6 +44,8 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _email.text,
         password: _password.text,
       );
+      // Let the OS/browser offer to save the credential now.
+      TextInput.finishAutofillContext();
       // Pull account's equipped skin; AuthGate swaps to AppShell automatically.
       await ThemeStore.instance.sync(() => BloomApi().fetchStore());
     } on AuthException catch (e) {
@@ -61,6 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     try {
       await AuthStore.instance.signInWithGoogle();
+      TextInput.finishAutofillContext();
       await ThemeStore.instance.sync(() => BloomApi().fetchStore());
     } on AuthException catch (e) {
       setState(() => _error = e.message);
@@ -144,6 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
+                  autofillHints: const [AutofillHints.email],
                   textCapitalization: TextCapitalization.none,
                   decoration: const InputDecoration(
                       labelText: 'Email',
@@ -286,6 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: SakuraTheme.cardDecoration(),
                       child: Form(
                         key: _form,
+                        child: AutofillGroup(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -304,6 +310,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               keyboardType: TextInputType.emailAddress,
                               autocorrect: false,
                               textCapitalization: TextCapitalization.none,
+                              autofillHints: const [AutofillHints.email],
+                              textInputAction: TextInputAction.next,
                               decoration: const InputDecoration(
                                 labelText: 'Email',
                                 hintText: 'you@example.com',
@@ -318,6 +326,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextFormField(
                               controller: _password,
                               obscureText: _obscure,
+                              autofillHints: const [AutofillHints.password],
+                              textInputAction: TextInputAction.done,
                               decoration: InputDecoration(
                                 labelText: 'Password',
                                 border: const OutlineInputBorder(),
@@ -442,6 +452,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               onTap: _googleSignIn,
                             ),
                           ],
+                        ),
                         ),
                       ),
                     ),

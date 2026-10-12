@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
@@ -50,6 +51,8 @@ class _SignupScreenState extends State<SignupScreen> {
       try {
         await ThemeStore.instance.sync(() => BloomApi().fetchStore());
       } catch (_) {}
+      // Let the OS/browser offer to save the new credential now.
+      TextInput.finishAutofillContext();
       if (mounted) {
         // No email hand-back: the new account is already signed in, so
         // AuthGate swaps to the app on its own — no second login wall.
@@ -103,6 +106,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 decoration: SakuraTheme.cardDecoration(),
                 child: Form(
                   key: _form,
+                  child: AutofillGroup(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -110,6 +114,8 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _name,
                         textCapitalization: TextCapitalization.words,
+                        autofillHints: const [AutofillHints.name],
+                        textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
                           labelText: 'Name (optional)',
                           hintText: 'e.g. Sakura',
@@ -124,6 +130,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         textCapitalization: TextCapitalization.none,
+                        autofillHints: const [AutofillHints.email],
+                        textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
                           labelText: 'Email',
                           hintText: 'you@example.com',
@@ -138,6 +146,8 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _password,
                         obscureText: _obscure,
+                        autofillHints: const [AutofillHints.newPassword],
+                        textInputAction: TextInputAction.next,
                         decoration: InputDecoration(
                           labelText: 'Password (min 8 characters)',
                           border: const OutlineInputBorder(),
@@ -160,6 +170,8 @@ class _SignupScreenState extends State<SignupScreen> {
                       TextFormField(
                         controller: _confirmPassword,
                         obscureText: _obscureConfirm,
+                        autofillHints: const [AutofillHints.newPassword],
+                        textInputAction: TextInputAction.done,
                         decoration: InputDecoration(
                           labelText: 'Confirm password',
                           border: const OutlineInputBorder(),
@@ -226,6 +238,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
                     ],
+                  ),
                   ),
                 ),
               ),
