@@ -124,6 +124,6 @@ app.post('/api/store/equip', requireAuth, async (req, res) => {
   }
 });
 
-// --- Batch: delete, search, export, password reset ---
+// --- Batch: delete, search, export ---
 
 }
