@@ -387,14 +387,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _complete(Task t) async {
     // Local game juice first — works offline so combo is always visible.
+    // XP moves only with the transition: completing grants, reopening
+    // revokes (anti-farm — done → undo → done must not mint XP).
     final game = GamificationStateNotifier.instance;
     final levelBefore = game.level;
-    game.registerTaskCompletion();
+    final next = nextStatus(t);
+    if (next == 'done') {
+      game.registerTaskCompletion(taskId: t.id);
+    } else {
+      game.revokeTaskCompletion(taskId: t.id);
+    }
     // Level crossing → one-shot burst + fanfare (no dialog stacks).
     if (game.level > levelBefore && mounted) {
       LevelUpBurst.celebrate(context, game);
     }
-    final next = nextStatus(t);
     // Repository move is optimistic + persisted: the board updates at
     // 0ms and survives offline. No "start the backend" dead-end.
     await TaskRepository.instance.moveTask(t.id, next);

@@ -68,6 +68,12 @@ class GamificationStateNotifier extends ChangeNotifier {
   DateTime? _comboExpiresAt;
   Timer? _comboTimer;
 
+  /// Undo support: gain + task of the most recent completion, so reopening
+  /// that task revokes exactly what it granted. Memory-only: after a
+  /// restart an undo falls back to the base amount.
+  String? _lastGainTaskId;
+  int? _lastGain;
+
   final Random _random;
 
   GamificationStateNotifier({Random? random}) : _random = random ?? Random();
@@ -132,7 +138,10 @@ class GamificationStateNotifier extends ChangeNotifier {
 
   /// Call when a task is completed. Returns the XP granted (incl. bonus).
   /// Chains completions inside [BloomEngine.comboWindow] into a combo.
-  int registerTaskCompletion({int baseXp = BloomEngine.baseTaskXp}) {
+  /// Pass the task id so a later undo can revoke exactly what was granted
+  /// (anti-farm: done → undo → done must not mint XP).
+  int registerTaskCompletion(
+      {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
     final now = DateTime.now();
     final last = _lastCompletionAt;
     if (last != null && now.difference(last) <= BloomEngine.comboWindow) {
@@ -153,10 +162,42 @@ class GamificationStateNotifier extends ChangeNotifier {
     }
     final gain = BloomEngine.xpForCombo(baseXp, _comboCount);
     _totalXp += gain;
+    _lastGainTaskId = taskId;
+    _lastGain = gain;
     _wilted = false; // a fresh bloom clears yesterday's wilt
     _persist();
     notifyListeners();
     return gain;
+  }
+
+  /// Call when a completed task is reopened (undone). Revokes the XP its
+  /// completion granted — the exact last gain when it was this task's,
+  /// otherwise the base amount — breaks the combo chain and walks back
+  /// today's completion count. Total XP floors at zero: levels can drop,
+  /// never below nothing. Returns the XP revoked.
+  int revokeTaskCompletion(
+      {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
+    var revoke = baseXp;
+    if (taskId != null &&
+        taskId == _lastGainTaskId &&
+        _lastGain != null &&
+        _lastGain! > 0) {
+      revoke = _lastGain!;
+    }
+    _lastGainTaskId = null;
+    _lastGain = null;
+    _totalXp = (_totalXp - revoke).clamp(0, 1 << 62);
+    // An undo breaks the chain: the next completion restarts at x1.
+    _comboCount = 0;
+    _comboExpiresAt = null;
+    _comboTimer?.cancel();
+    final day = _dayKey(DateTime.now());
+    if (_doneDayIso == day && _doneCount > 0) {
+      _doneCount--;
+    }
+    _persist();
+    notifyListeners();
+    return revoke;
   }
 
   /// Daily ritual → variable token drop (70/25/5). Adds tokens, returns roll.
@@ -349,6 +390,8 @@ class GamificationStateNotifier extends ChangeNotifier {
     _doneDayIso = null;
     _doneCount = 0;
     _nudgedDayIso = null;
+    _lastGainTaskId = null;
+    _lastGain = null;
     _persist();
     notifyListeners();
   }
@@ -371,6 +414,8 @@ class GamificationStateNotifier extends ChangeNotifier {
     _doneDayIso = _dayKey(DateTime.now());
     _doneCount = 0;
     _nudgedDayIso = null;
+    _lastGainTaskId = null;
+    _lastGain = null;
     _persist();
     notifyListeners();
   }
