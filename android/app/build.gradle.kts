@@ -23,6 +23,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by flutter_local_notifications (Java 8+ time APIs on
+        // older devices). Without this, :app:checkReleaseAarMetadata fails.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     defaultConfig {
@@ -30,7 +33,10 @@ android {
         applicationId = "com.dailybloom.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 24, not flutter.minSdkVersion: flutter_local_notifications
+        // requires minSdk 24, and the merger fails the build otherwise.
+        // Android 7.0+ (2016) — negligible device loss in 2026.
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -57,6 +63,10 @@ android {
             storePassword = keystoreProperties["storePassword"] as String?
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 kotlin {
