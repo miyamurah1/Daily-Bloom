@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="plan_widget_desc">Today's top-3 plan from Daily Bloom. Tap a task to open it.</string>
+    <string name="plan_widget_desc">Top-3 daily plan from Daily Bloom. Tap a task to open it.</string>
 </resources>
