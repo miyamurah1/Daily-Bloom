@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import '../data/ambient_sound.dart';
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/focus_controller.dart';
@@ -39,6 +40,7 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
   String? _selectedSubId;
   FocusHistory? _history;
   late String _quote;
+  bool _ambientOn = false;
 
   Task? get _task => widget.task ?? FocusController.instance.task;
 
@@ -73,6 +75,21 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
     // One quote per day per mode — stable all day, fresh tomorrow.
     _quote = focusQuoteFor(DateTime.now(), _mode);
     _loadContext();
+    AmbientSound.load().then((_) {
+      if (mounted) setState(() => _ambientOn = AmbientSound.enabled);
+    });
+  }
+
+  Future<void> _toggleAmbient() async {
+    final next = !_ambientOn;
+    await AmbientSound.setEnabled(next);
+    if (!mounted) return;
+    setState(() => _ambientOn = next);
+    // If a session runs, the wash follows immediately.
+    final fc = FocusController.instance;
+    if (fc.active && !fc.paused && next) {
+      await AmbientSound.sync(playing: true);
+    }
   }
 
   /// Subtasks to focus on + session totals for the reward streak.
@@ -395,6 +412,42 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
                           letterSpacing: 1.6),
                     ),
                   ),
+                // Ambient wash: opt-in rain loop under the session.
+                // Silent by default — a focus screen never starts audio
+                // uninvited.
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: GestureDetector(
+                    onTap: _toggleAmbient,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _ambientOn
+                              ? LucideIcons.cloudRain
+                              : LucideIcons.cloud,
+                          size: 13,
+                          color: _ambientOn
+                              ? SakuraColors.primary
+                              : Colors.white38,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _ambientOn ? 'RAIN ON' : 'RAIN OFF',
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 2.2,
+                            fontWeight: FontWeight.w700,
+                            color: _ambientOn
+                                ? SakuraColors.primary
+                                : Colors.white38,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(flex: 2),
                 // Digits — clean mono face, soft glow, tap for presets.
                 // Scoped tick: only this label rebuilds each second.

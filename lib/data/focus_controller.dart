@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
+import 'ambient_sound.dart';
 import 'auth_store.dart';
 import 'mock_data.dart';
 import 'reminders.dart';
@@ -101,6 +102,8 @@ class FocusController extends ChangeNotifier {
         duration: remaining,
         label: task?.title ?? 'Free Deep Work',
       ));
+      // Ambient wash follows the session when the user opted in.
+      unawaited(AmbientSound.sync(playing: true));
     } finally {
       busy = false;
       notifyListeners();
@@ -130,6 +133,7 @@ class FocusController extends ChangeNotifier {
     paused = true;
     // A paused timer must not fire: the alarm would lie.
     unawaited(ReminderService.instance.cancelFocusTimerNotification());
+    unawaited(AmbientSound.sync(playing: false));
     notifyListeners();
   }
 
@@ -141,6 +145,7 @@ class FocusController extends ChangeNotifier {
       duration: remaining,
       label: task?.title ?? 'Free Deep Work',
     ));
+    unawaited(AmbientSound.sync(playing: true));
     notifyListeners();
   }
 
@@ -177,6 +182,7 @@ class FocusController extends ChangeNotifier {
     _ticker?.cancel();
     // Session over (early or on time): any pending alarm is now stale.
     unawaited(ReminderService.instance.cancelFocusTimerNotification());
+    unawaited(AmbientSound.sync(playing: false));
     final actual = _elapsedMinutes();
     final wasFocus = mode == 'focus';
     final title = task?.title ?? 'Free Focus';
@@ -209,6 +215,7 @@ class FocusController extends ChangeNotifier {
     if (id == null) return;
     _ticker?.cancel();
     unawaited(ReminderService.instance.cancelFocusTimerNotification());
+    unawaited(AmbientSound.sync(playing: false));
     final actual = _elapsedMinutes();
     _clear();
     try {

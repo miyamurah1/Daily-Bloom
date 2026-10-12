@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:daily_bloom/data/ambient_sound.dart';
 import 'package:daily_bloom/data/focus_quotes.dart';
 import 'package:daily_bloom/data/session_sound.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +28,19 @@ void main() {
 
   test('chime never throws without platform channels', () async {
     await SessionSound.chime();
+  });
+
+  test('ambient wash is headless-safe and persists its toggle', () async {
+    await AmbientSound.load();
+    expect(AmbientSound.enabled, isFalse);
+    await AmbientSound.setEnabled(true);
+    expect(AmbientSound.enabled, isTrue);
+    // No binding, no player: sync/stop degrade to no-ops, never throw.
+    await AmbientSound.sync(playing: true);
+    await AmbientSound.sync(playing: false);
+    await AmbientSound.stop();
+    await AmbientSound.setEnabled(false);
+    expect(AmbientSound.enabled, isFalse);
   });
 
   test('fetchRandomQuote returns the API line on success', () async {

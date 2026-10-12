@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../game/game.dart';
+import 'data/ambient_sound.dart';
 import 'data/api_client.dart';
 import 'data/auth_store.dart';
 import 'data/crash_reports.dart';
@@ -33,6 +34,10 @@ void main() async {
   // Energy labels are local-first: restore before first frame so cards
   // never flash unlabeled.
   await EnergyStore.instance.load();
+
+  // Ambient preference is local-only; the wash itself stays off until a
+  // session starts it.
+  await AmbientSound.load();
 
   // Reminder preference restores silently; scheduling re-arms inside
   // init when enabled (the OS drops alarms on reboot/update).
