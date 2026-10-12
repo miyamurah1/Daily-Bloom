@@ -39,34 +39,65 @@ app.post('/api/auth/firebase-sync', authLimiter, async (req, res) => {
       // Existing account — update firebase_uid if not set yet (migration).
       const row = existing[0];
       if (!row.firebase_uid) {
-        await pool.query(
-          'UPDATE users SET firebase_uid = $1 WHERE id = $2',
-          [uid, row.id],
-        );
+        try {
+          await pool.query(
+            'UPDATE users SET firebase_uid = $1 WHERE id = $2',
+            [uid, row.id],
+          );
+        } catch (e) {
+          // Concurrent sign-in already migrated this row — re-read it.
+          if (e?.code !== '23505') throw e;
+          const { rows: raced } = await pool.query(
+            `SELECT * FROM users WHERE firebase_uid = $1 OR lower(email) = $2 LIMIT 1`,
+            [uid, email],
+          );
+          if (raced.length) {
+            res.json({ user: publicUser(raced[0]) });
+            return;
+          }
+          throw e;
+        }
       }
       user = publicUser({ ...row, firebase_uid: uid });
     } else {
       // Brand-new account — create DB row and seed defaults.
-      const { rows } = await pool.query(
-        `INSERT INTO users (firebase_uid, email, display_name)
-         VALUES ($1, $2, $3) RETURNING *`,
-        [uid, email, displayName],
-      );
-      user = publicUser(rows[0]);
+      // Race-safe: the app calls firebase-sync after every sign-in AND on
+      // restore, so 2-3 requests routinely land concurrently. The loser of
+      // the INSERT race gets 23505 — re-read the winner's row instead of
+      // failing the login with a misleading 401.
+      try {
+        const { rows } = await pool.query(
+          `INSERT INTO users (firebase_uid, email, display_name)
+           VALUES ($1, $2, $3) RETURNING *`,
+          [uid, email, displayName],
+        );
+        user = publicUser(rows[0]);
+      } catch (e) {
+        if (e?.code !== '23505') throw e;
+        const { rows: raced } = await pool.query(
+          `SELECT * FROM users WHERE firebase_uid = $1 OR lower(email) = $2 LIMIT 1`,
+          [uid, email],
+        );
+        if (!raced.length) throw e;
+        res.json({ user: publicUser(raced[0]) });
+        return;
+      }
       // Seed: 450 starting tokens, free baseline themes, one automation rule.
+      // All guards are idempotent so a raced retry never double-seeds.
       try {
         await pool.query(
-          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450)',
+          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450) ON CONFLICT (user_id) DO NOTHING',
           [user.id]);
         await pool.query(
-          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2)',
+          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [user.id, 'edo']);
         await pool.query(
-          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2)',
+          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [user.id, 'midnight']);
         await pool.query(
           `INSERT INTO rules (user_id, name, trigger, condition, actions)
-           VALUES ($1, 'Done → +10 tokens', 'task_done', '{}', $2)`,
+           SELECT $1, 'Done → +10 tokens', 'task_done', '{}', $2
+           WHERE NOT EXISTS (SELECT 1 FROM rules WHERE user_id = $1 AND name = 'Done → +10 tokens')`,
           [user.id, JSON.stringify([{ type: 'award_tokens', amount: 10 }])]);
       } catch (e) {
         console.error('[auth] seed failed:', e?.code ?? e);
