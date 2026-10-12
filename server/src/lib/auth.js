@@ -36,32 +36,47 @@ async function requireAuth(req, res, next) {
         await pool.query('SELECT id FROM users WHERE firebase_uid = $1', [uid])
       ).rows;
       if (!rows.length) {
-        const created = (
+        try {
+          const created = (
+            await pool.query(
+              `INSERT INTO users (firebase_uid, email, display_name)
+               VALUES ($1, $2, $3) RETURNING id`,
+              [uid, testEmail, testEmail.split('@')[0]],
+            )
+          ).rows;
+          rows = created;
+        } catch (e) {
+          // Concurrent first-request race: re-read the winner's row.
+          if (e?.code !== '23505') throw e;
+          rows = (
+            await pool.query('SELECT id FROM users WHERE firebase_uid = $1', [
+              uid,
+            ])
+          ).rows;
+          if (!rows.length) throw e;
+        }
+        if (rows.length) {
+          const newId = rows[0].id;
+          // Seeds are idempotent: a raced retry never double-seeds.
           await pool.query(
-            `INSERT INTO users (firebase_uid, email, display_name)
-             VALUES ($1, $2, $3) RETURNING id`,
-            [uid, testEmail, testEmail.split('@')[0]],
-          )
-        ).rows;
-        rows = created;
-        const newId = created[0].id;
-        await pool.query(
-          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450)',
-          [newId],
-        );
-        await pool.query(
-          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2)',
-          [newId, 'edo'],
-        );
-        await pool.query(
-          'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2)',
-          [newId, 'midnight'],
-        );
-        await pool.query(
-          `INSERT INTO rules (user_id, name, trigger, condition, actions)
-           VALUES ($1, 'Done → +10 tokens', 'task_done', '{}', $2)`,
-          [newId, JSON.stringify([{ type: 'award_tokens', amount: 10 }])],
-        );
+            'INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450) ON CONFLICT (user_id) DO NOTHING',
+            [newId],
+          );
+          await pool.query(
+            'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [newId, 'edo'],
+          );
+          await pool.query(
+            'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [newId, 'midnight'],
+          );
+          await pool.query(
+            `INSERT INTO rules (user_id, name, trigger, condition, actions)
+             SELECT $1, 'Done → +10 tokens', 'task_done', '{}', $2
+             WHERE NOT EXISTS (SELECT 1 FROM rules WHERE user_id = $1 AND name = 'Done → +10 tokens')`,
+            [newId, JSON.stringify([{ type: 'award_tokens', amount: 10 }])],
+          );
+        }
       }
       req.userId = rows[0].id;
       req.firebaseUid = uid;

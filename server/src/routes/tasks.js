@@ -102,7 +102,16 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
       `INSERT INTO tasks (title, tag, status, folder, avatar_label, description, priority, recurring, position, due_at, user_id, client_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [cleanTitle, cleanTag, status, cleanFolder, avatar_label, cleanDesc, cleanPriority, cleanRecurring, position, due, req.userId, clientId],
-    );
+    ).catch(async (e) => {
+      // Double-submit race: both requests passed the client_id dup-check
+      // above, the loser hits the unique constraint — return the
+      // winner's row instead of a misleading 500.
+      if (e?.code !== '23505' || !clientId) throw e;
+      const { rows: raced } = await pool.query(
+        'SELECT * FROM tasks WHERE client_id = $1', [clientId]);
+      if (!raced.length || raced[0].user_id !== req.userId) throw e;
+      return { rows: raced };
+    });
     await logEvent(pool, rows[0].id, req.userId, 'created', { to: rows[0].status });
     await runRules(pool, 'task_created', rows[0], req.userId);
     res.status(201).json(rows[0]);

@@ -84,15 +84,17 @@ app.post('/api/store/buy', requireAuth, async (req, res) => {
       }
       if (!wallet.length) {
         await client.query(
-          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, $2)',
+          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING',
           [req.userId, 450 - theme.price]);
       } else {
         await client.query(
           'UPDATE user_tokens SET balance = balance - $2, updated_at = now() WHERE user_id = $1',
           [req.userId, theme.price]);
       }
+      // Double-tap buy race: both requests passed the owned-check above —
+      // the loser no-ops instead of rolling back with a 500.
       await client.query(
-        'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2)',
+        'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
         [req.userId, id]);
       await client.query('COMMIT');
       res.status(201).json({ ok: true });
