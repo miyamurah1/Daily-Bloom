@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network: Firebase Auth, backend sync, Google sign-in. Declared
+         explicitly (normal permission, Play-safe) instead of relying on
+         the INTERNET entry merged in from google_sign_in_android. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Voice capture (quick-add mic). Requested at first use, not install. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Focus-timer expiry alarm: exact timing when granted (Android 12+),
