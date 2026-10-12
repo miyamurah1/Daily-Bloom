@@ -99,6 +99,21 @@ class FirstWeekArc {
     } catch (_) {}
   }
 
+  /// Fresh slate for a new account: the next account replays the arc
+  /// from step 0 instead of inheriting a finished one.
+  Future<void> resetForNewAccount() async {
+    _planted = false;
+    _planned = false;
+    _staked = false;
+    _loaded = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kPlanted);
+      await prefs.remove(_kPlanned);
+      await prefs.remove(_kStaked);
+    } catch (_) {}
+  }
+
   /// Test seam: wipe to a fresh-arc state.
   @visibleForTesting
   void debugReset() {

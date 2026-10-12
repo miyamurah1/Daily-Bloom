@@ -328,6 +328,31 @@ class GamificationStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fresh slate for a new account (logout / switch / signup).
+  /// Same shape as a first install: [load] would zero these anyway once
+  /// the keys are gone, but memory needs the explicit clear or the new
+  /// account inherits the old account's XP, streak and stakes.
+  void resetForNewAccount() {
+    _comboTimer?.cancel();
+    _totalXp = 0;
+    _tokens = 0;
+    _streak = 0;
+    _comboCount = 0;
+    _lastCompletionAt = null;
+    _comboExpiresAt = null;
+    _lastDayIso = null;
+    _stakedDayIso = null;
+    _stakedIds = const [];
+    _wilted = false;
+    _lastStakeLoss = 0;
+    _wiltStreak = 0;
+    _doneDayIso = null;
+    _doneCount = 0;
+    _nudgedDayIso = null;
+    _persist();
+    notifyListeners();
+  }
+
   /// Demo helper: back to a fresh Seedling.
   void debugReset() {
     _comboTimer?.cancel();

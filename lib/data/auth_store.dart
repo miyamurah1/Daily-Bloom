@@ -6,6 +6,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'account_wipe.dart';
+
 /// Logged-in user profile (mirrors the backend's `publicUser()` shape).
 class AuthUser {
   final String id;
@@ -137,6 +139,17 @@ class AuthStore extends ChangeNotifier {
           _ready = true;
           notifyListeners();
         } else {
+          // Account switch guard: every store persists under global keys,
+          // so a different Firebase identity must start from a clean
+          // device or the new account inherits the old one's tasks/XP.
+          // Same-account cold starts skip the wipe (offline data stays).
+          final cached = _user;
+          final sameAccount = cached != null &&
+              cached.email.toLowerCase() ==
+                  (firebaseUser.email ?? '').toLowerCase();
+          if (!sameAccount) {
+            await clearAccountData();
+          }
           // Sync profile from the backend (upserts DB row with Firebase UID).
           try {
             _user = await _syncProfile(firebaseUser);
@@ -200,6 +213,9 @@ class AuthStore extends ChangeNotifier {
         email: email.trim(),
         password: password,
       );
+      // Brand-new Firebase identity: start from a clean device even if a
+      // previous account's data survived (upgrade path, missed logout).
+      await clearAccountData();
       // Update the Firebase display name immediately.
       if (name.isNotEmpty) {
         await cred.user?.updateDisplayName(name.trim());
@@ -300,6 +316,9 @@ class AuthStore extends ChangeNotifier {
     } catch (_) {}
     await FirebaseAuth.instance.signOut();
     // authStateChanges() listener sets _user = null + notifies.
+    // Drop per-account data so the next login starts clean (shared
+    // devices, tester switching accounts).
+    await clearAccountData();
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────

@@ -103,6 +103,18 @@ class EnergyStore extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Fresh slate for a new account. [load] keeps stale memory when the
+  /// key is missing, so the wipe needs this explicit clear.
+  Future<void> resetForNewAccount() async {
+    _levels = {};
+    _loaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+    } catch (_) {}
+    notifyListeners();
+  }
+
   @visibleForTesting
   void debugFill([Map<String, String>? levels]) {
     _levels = Map.of(levels ?? const {});

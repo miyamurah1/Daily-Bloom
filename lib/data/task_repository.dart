@@ -188,6 +188,27 @@ class TaskRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fresh slate for a new account (logout / account switch / signup).
+  /// Clears memory AND disk so the next account never sees the previous
+  /// account's tasks or queued mutations. All stores use global prefs
+  /// keys, so without this a new login inherits old data.
+  Future<void> clearForAccountSwitch() async {
+    _cancelRetry();
+    _tasks = [];
+    _outbox.clear();
+    _deadLetters.clear();
+    _eventsCache.clear();
+    _focusCache.clear();
+    _error = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kTasksCache);
+      await prefs.remove(_kOutbox);
+      await prefs.remove(_kDeadLetters);
+    } catch (_) {}
+    notifyListeners();
+  }
+
   /// Re-queue parked mutations so the next sync replays them. Used by
   /// the Settings "sync issues" row: a fix on the server (or a login)
   /// makes a previously-fatal mutation valid again.

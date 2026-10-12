@@ -211,6 +211,18 @@ class GoalStore extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Fresh slate for a new account. [load] keeps stale memory when the
+  /// key is missing, so the wipe needs this explicit clear.
+  Future<void> resetForNewAccount() async {
+    _goals = [];
+    _loaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(storageKey);
+    } catch (_) {}
+    notifyListeners();
+  }
+
   @visibleForTesting
   void debugFill([List<ProjectGoal>? goals]) {
     _goals = List.of(goals ?? const []);
