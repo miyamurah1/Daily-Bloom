@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
 import rateLimit from 'express-rate-limit';
-import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
+import { initializeApp, cert } from 'firebase-admin/app';
 import { publicUser, createRequireAuth } from './lib/auth.js';
 import { logEvent, runRules, validRuleBody, THEMES } from './lib/engine.js';
 import { levelFor, streakStats } from './lib/stats.js';
@@ -26,8 +26,13 @@ import { registerAiRoutes } from './routes/ai.js';
 // Without one of these, verifyIdToken() rejects every token and the app
 // sits in offline mode with firebase-sync 401s — Firebase login itself
 // still succeeds, which is exactly the confusing split in the web log.
+// Without an explicit service account, verifyIdToken() rejects every
+// token and the app sits in offline mode with firebase-sync 401s.
+// NOTE: applicationDefault() always "succeeds" at init (lazy creds) and
+// only fails on first verify — which is why health used to lie
+// `firebaseReady:true` on Render. Now: no key file/json = ready:false.
 let firebaseReady = false;
-let firebaseCredentialSource = 'application-default';
+let firebaseCredentialSource = 'none';
 try {
   const saJson = process.env.FIREBASE_SERVICE_ACCOUNT;
   const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -44,7 +49,9 @@ try {
     credential = cert(JSON.parse(readFileSync(abs, 'utf8')));
     firebaseCredentialSource = 'file:' + abs;
   } else {
-    credential = applicationDefault();
+    throw new Error(
+      'no Firebase credential: set FIREBASE_SERVICE_ACCOUNT (or GOOGLE_APPLICATION_CREDENTIALS)',
+    );
   }
   initializeApp({ credential });
   firebaseReady = true;
