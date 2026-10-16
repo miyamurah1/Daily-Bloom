@@ -50,6 +50,16 @@ server/.env
 server/firebase-service-account.json
 server/*.log
 server/*.err
+server/*.txt
+server/npm_test_full.log
+server/run-*.log
+server/server*.log
+
+# Local test / debug output (never commit triage logs)
+test_out*.txt
+full_out.txt
+ci.yml.txt
+tool/audit_out.txt
 
 # Firebase credentials — NEVER commit these
 google-services.json
