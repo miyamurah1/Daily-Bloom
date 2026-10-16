@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../data/ai_client.dart';
 import '../data/haptics.dart';
 import '../data/task_repository.dart';
+import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import 'bloom_snackbar.dart';
@@ -191,6 +192,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
       _growing = true;
     });
     AppHaptics.confirm();
+    TapSound.tap();
   }
 
   /// Called when the 🌱 grow animation completes: dismiss + confirm.
