@@ -56,8 +56,16 @@ try {
 }
 
 const { Pool } = pg;
+// Render/Railway Postgres needs TLS (self-signed is fine — the wire is
+// still encrypted). Local docker has no TLS. `sslmode=require` in the URL
+// also works; this keeps both paths green without env juggling.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.DATABASE_URL?.includes('render.com') ||
+    process.env.DATABASE_URL?.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 
 

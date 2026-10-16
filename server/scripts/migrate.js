@@ -33,7 +33,14 @@ const ORDER = [
   'migration_017_free_focus.sql',
 ];
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl:
+    process.env.DATABASE_URL?.includes('render.com') ||
+    process.env.DATABASE_URL?.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : undefined,
+});
 
 await pool.query(
   `CREATE TABLE IF NOT EXISTS schema_migrations (
