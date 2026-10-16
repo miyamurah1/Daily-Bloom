@@ -4,6 +4,9 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../data/haptics.dart';
+import '../data/session_sound.dart';
+import '../data/tap_sound.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
@@ -28,6 +31,24 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // Theme moment: the singing-bowl greets the login screen (soft) with
+    // one gentle buzz, so the screen feels alive from the first frame.
+    SessionSound.chime(volume: 0.6);
+    AppHaptics.tap();
+    // The form remembers your last signed-in address.
+    AuthStore.readLastEmail().then((address) {
+      if (address != null &&
+          address.isNotEmpty &&
+          mounted &&
+          _email.text.isEmpty) {
+        setState(() => _email.text = address);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _email.dispose();
     _password.dispose();
@@ -38,6 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _error = null);
     if (!(_form.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
+    AppHaptics.tap();
+    await TapSound.tap();
     setState(() => _busy = true);
     try {
       await AuthStore.instance.login(
@@ -46,6 +69,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       // Let the OS/browser offer to save the credential now.
       TextInput.finishAutofillContext();
+      // You're in — the app's signature bowl marks the moment.
+      SessionSound.chime();
       // Pull account's equipped skin; AuthGate swaps to AppShell automatically.
       await ThemeStore.instance.sync(() => BloomApi().fetchStore());
     } on AuthException catch (e) {
@@ -58,13 +83,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _googleSignIn() async {
+    AppHaptics.tap();
+    await TapSound.tap();
     setState(() {
       _error = null;
       _googleBusy = true;
     });
     try {
-      await AuthStore.instance.signInWithGoogle();
+      final signedIn = await AuthStore.instance.signInWithGoogle();
       TextInput.finishAutofillContext();
+      if (!signedIn) return; // Picker cancelled — no error, no sync.
+      // Real sign-in — celebrate before AuthGate swaps screens.
+      SessionSound.chime();
       await ThemeStore.instance.sync(() => BloomApi().fetchStore());
     } on AuthException catch (e) {
       setState(() => _error = e.message);
@@ -89,6 +119,8 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) {
           Future<void> send() async {
+            AppHaptics.tap();
+            await TapSound.tap();
             final email = emailCtrl.text.trim();
             if (AuthStore.validateEmail(email) != null) {
               setSheet(() => error = 'Enter a valid email address first');
@@ -103,6 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
               await AuthStore.instance.sendPasswordReset(email);
               setSheet(() => success =
                   'Reset email sent to $email — check your inbox (and spam folder).');
+              AppHaptics.confirm();
             } on AuthException catch (e) {
               setSheet(() => error = e.message);
             } catch (_) {
@@ -198,6 +231,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _goSignup() async {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    AppHaptics.tap();
+    await TapSound.tap();
     final result = await navigator.push(
       SakuraPageRoute(builder: (_) => const SignupScreen()),
     );
@@ -335,8 +370,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   icon: Icon(_obscure
                                       ? LucideIcons.eyeOff
                                       : LucideIcons.eye),
-                                  onPressed: () => setState(
-                                      () => _obscure = !_obscure),
+                                  onPressed: () {
+                                    AppHaptics.select();
+                                    setState(
+                                        () => _obscure = !_obscure);
+                                  },
                                 ),
                               ),
                               validator: (v) =>

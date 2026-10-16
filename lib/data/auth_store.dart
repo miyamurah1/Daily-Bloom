@@ -67,6 +67,20 @@ class AuthException implements Exception {
 ///   is re-emitted here via [ChangeNotifier].
 class AuthStore extends ChangeNotifier {
   static const _kUser = 'bloom_user_v2'; // new key to avoid stale JWT data
+  static const _kLastEmail = 'bloom_last_email_v1';
+
+  /// Web OAuth client ID for Google sign-in (from google-services.json →
+  /// oauth_client type 3). google_sign_in on Android falls back to
+  /// R.string.default_web_client_id, which only exists when the
+  /// google-services Gradle plugin is applied — this project ships neither
+  /// that file nor that plugin, so without this explicit ID the ID token
+  /// has no audience and every Google sign-in fails.
+  static const googleWebClientId =
+      '789612027996-nri9p33e5djdd56atjmlqou5fi9mcq9o.apps.googleusercontent.com';
+
+  /// One shared client so sign-in and sign-out run with identical options.
+  static GoogleSignIn _googleClient() =>
+      GoogleSignIn(serverClientId: googleWebClientId);
 
   static const String baseUrl = String.fromEnvironment(
     'BLOOM_API',
@@ -121,6 +135,26 @@ class AuthStore extends ChangeNotifier {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  /// Remember the last signed-in address so the login form can prefill it.
+  Future<void> _rememberEmail(String? email) async {
+    final address = email?.trim() ?? '';
+    if (address.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kLastEmail, address);
+    } catch (_) {}
+  }
+
+  /// Last signed-in address for login prefill (null on first run / prefs fail).
+  static Future<String?> readLastEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_kLastEmail);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Called once at startup: restore cached profile and listen for Firebase
@@ -198,6 +232,7 @@ class AuthStore extends ChangeNotifier {
         email: email.trim(),
         password: password,
       );
+      await _rememberEmail(email);
       // authStateChanges() listener above handles _user sync + notifyListeners.
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
@@ -237,7 +272,7 @@ class AuthStore extends ChangeNotifier {
           await FirebaseAuth.instance.signOut();
         } catch (_) {}
         try {
-          await GoogleSignIn().signOut();
+          await _googleClient().signOut();
         } catch (_) {}
         _user = null;
         _ready = true;
@@ -256,8 +291,10 @@ class AuthStore extends ChangeNotifier {
     }
   }
 
-  /// Sign in with Google via Firebase Auth.
-  Future<void> signInWithGoogle() async {
+  /// Sign in with Google via Firebase Auth. Returns true when a session was
+  /// actually established (false = the account picker was cancelled), so
+  /// callers can celebrate only real sign-ins.
+  Future<bool> signInWithGoogle() async {
     try {
       if (kIsWeb) {
         // Web: use Firebase popup flow.
@@ -265,8 +302,8 @@ class AuthStore extends ChangeNotifier {
         await FirebaseAuth.instance.signInWithPopup(provider);
       } else {
         // Mobile: use google_sign_in package.
-        final googleUser = await GoogleSignIn().signIn();
-        if (googleUser == null) return; // User cancelled.
+        final googleUser = await _googleClient().signIn();
+        if (googleUser == null) return false; // User cancelled.
         final googleAuth = await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
@@ -274,7 +311,9 @@ class AuthStore extends ChangeNotifier {
         );
         await FirebaseAuth.instance.signInWithCredential(credential);
       }
+      await _rememberEmail(FirebaseAuth.instance.currentUser?.email);
       // authStateChanges() listener handles _user sync + notifyListeners.
+      return true;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
     } catch (_) {
@@ -321,7 +360,7 @@ class AuthStore extends ChangeNotifier {
     // throws — Firebase sign-out below must still run, or logout
     // silently strands the user logged in.
     try {
-      await GoogleSignIn().signOut();
+      await _googleClient().signOut();
     } catch (_) {}
     await FirebaseAuth.instance.signOut();
     // authStateChanges() listener sets _user = null + notifies.

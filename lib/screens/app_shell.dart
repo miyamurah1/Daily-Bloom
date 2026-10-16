@@ -5,10 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/focus_controller.dart';
+import '../data/haptics.dart';
 import '../data/mock_data.dart';
 import '../data/plan_widget.dart';
 import '../data/reminders.dart';
 import '../data/task_repository.dart';
+import '../data/tap_sound.dart';
 import '../game/game.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
@@ -147,6 +149,8 @@ class _AppShellState extends State<AppShell>
 
   void _go(int i) {
     if (i == _index) return;
+    AppHaptics.select();
+    TapSound.tap();
     setState(() {
       _index = i;
       _visited.add(i);
@@ -209,10 +213,14 @@ class _AppShellState extends State<AppShell>
   }
 
   void _openQuickAdd() {
+    AppHaptics.tap();
+    TapSound.tap();
     showQuickAddTask(context);
   }
 
   void _openQuickRitual() {
+    AppHaptics.tap();
+    TapSound.tap();
     showQuickAddRitual(context);
   }
 

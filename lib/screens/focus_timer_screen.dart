@@ -8,7 +8,9 @@ import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/focus_controller.dart';
 import '../data/focus_quotes.dart';
+import '../data/haptics.dart';
 import '../data/mock_data.dart';
+import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 
@@ -82,6 +84,8 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
 
   Future<void> _toggleAmbient() async {
     final next = !_ambientOn;
+    AppHaptics.tap();
+    await TapSound.tap();
     await AmbientSound.setEnabled(next);
     if (!mounted) return;
     setState(() => _ambientOn = next);
@@ -89,6 +93,11 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
     final fc = FocusController.instance;
     if (fc.active && !fc.paused && next) {
       await AmbientSound.sync(playing: true);
+    } else if (next) {
+      // No running session = nothing to play yet. Say so instead of
+      // letting the toggle look broken in silence.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Rain will start with your next focus session.')));
     }
   }
 

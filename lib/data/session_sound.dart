@@ -15,15 +15,15 @@ abstract class SessionSound {
   /// (plain unit tests) — so construction itself must be guarded.
   static AudioPlayer? _player;
 
-  /// Play the bundled bell at full volume + heavy haptic. Guarded at
+  /// Play the bundled bell at [volume] (1.0 = full) + heavy haptic. Guarded at
   /// every step: asset, system tone, and vibrator each degrade silently.
-  static Future<void> chime() async {
+  static Future<void> chime({double volume = 1.0}) async {
     try {
       // Touching the player without a binding (plain unit tests) throws
       // in an async gap that try/catch cannot see — so check first.
       WidgetsBinding.instance;
       _player ??= AudioPlayer();
-      await _player!.setVolume(1.0);
+      await _player!.setVolume(volume);
       await _player!.play(AssetSource('sounds/bell.wav'));
     } catch (_) {
       // No binding, or asset/player unavailable — fall back below.

@@ -107,6 +107,31 @@ jobs:
             }
           EOF
           fi
+      - name: Warn when Firebase secrets are missing (login dead in CI)
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+        run: |
+          if [ -z "$FIREBASE_API_KEY" ]; then
+            echo "::warning title=Login will be broken::FIREBASE_* secrets are not set - this APK uses CI-STUB Firebase config, so email and Google sign-in cannot work. Set the 4 FIREBASE_* secrets in Settings > Secrets and variables > Actions, then rebuild."
+          fi
+      - name: Configure Android release signing (when secrets provided)
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 -d > android/upload-keystore.jks
+            cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEYSTORE_PASSWORD
+          storeFile=../upload-keystore.jks
+          EOF
+            echo "Release signing configured from secrets (stable SHA-1)."
+          else
+            echo "::warning title=Debug-signed APK::Android signing secrets not set - this CI build uses an ephemeral debug key, so its SHA-1 differs on every build and Google sign-in will fail for CI-built APKs. Set ANDROID_KEYSTORE_* secrets or build locally (android/key.properties exists there)."
+          fi
       - run: flutter analyze
       - run: >
           flutter build apk --release

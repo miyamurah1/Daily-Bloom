@@ -39,3 +39,4 @@ flutter:
   assets:
     - assets/sounds/bell.wav
     - assets/sounds/tap.wav
+    - assets/sounds/rain.wav
