@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../game/game.dart';
 import 'data/ambient_sound.dart';
+import 'data/tap_sound.dart';
 import 'data/api_client.dart';
 import 'data/auth_store.dart';
 import 'data/crash_reports.dart';
@@ -38,6 +39,9 @@ void main() async {
   // Ambient preference is local-only; the wash itself stays off until a
   // session starts it.
   await AmbientSound.load();
+
+  // Gentle tap sounds: on by default (confirmations, not ambience).
+  await TapSound.load();
 
   // Reminder preference restores silently; scheduling re-arms inside
   // init when enabled (the OS drops alarms on reboot/update).

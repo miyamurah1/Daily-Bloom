@@ -16,6 +16,7 @@ import '../data/habit_store.dart';
 import '../data/plan_widget.dart';
 import '../data/reminders.dart';
 import '../data/haptics.dart';
+import '../data/tap_sound.dart';
 import '../data/mock_data.dart';
 import '../data/task_repository.dart';
 import '../game/first_week_arc.dart';
@@ -394,8 +395,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final next = nextStatus(t);
     if (next == 'done') {
       game.registerTaskCompletion(taskId: t.id);
+      // Done celebration: double-pulse haptic + soft blip.
+      AppHaptics.bloom();
+      TapSound.tap();
     } else {
       game.revokeTaskCompletion(taskId: t.id);
+      AppHaptics.tap();
     }
     // Level crossing → one-shot burst + fanfare (no dialog stacks).
     if (game.level > levelBefore && mounted) {
@@ -891,11 +896,14 @@ class _HomeScreenState extends State<HomeScreen> {
   void _claimBloom() {
     // Gather thump: the reward moment gets the heavier buzz.
     AppHaptics.confirm();
+    TapSound.tap();
     final reward = GamificationStateNotifier.instance.claimDailyRitual();
     MysteryBloomOverlay.show(context, reward: reward);
   }
 
   void _jumpToSection(int index) {
+    AppHaptics.select();
+    TapSound.tap();
     setState(() => _sectionIndex = index);
     final keys = [_intentionKey, _flowKey];
     final ctx = keys[index.clamp(0, keys.length - 1)].currentContext;
@@ -1668,6 +1676,9 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 /// Live/offline sync pill + offline note. Pure presentational extract.
+///
+/// Offline honesty: queued counts say "saved on this phone" so users
+/// never wonder if their tasks are lost. A Retry tap forces [syncNow].
 class _SyncBanner extends StatelessWidget {
   final bool live;
   final String? note;
@@ -1691,27 +1702,36 @@ class _SyncBanner extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    // Theme-native states: tinted brand when live, quiet
-                    // surface when offline — no pastel hardcodes glowing in
-                    // Midnight. Matches the app-bar pill language.
-                    color: live
-                        ? SakuraColors.primarySoft
-                        : SakuraColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: SakuraColors.cardBorder),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
+                GestureDetector(
+                  onTap: pending > 0
+                      ? () {
+                          AppHaptics.tap();
+                          TaskRepository.instance.syncNow();
+                        }
+                      : null,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      // Theme-native states: tinted brand when live, quiet
+                      // surface when offline — no pastel hardcodes glowing in
+                      // Midnight. Matches the app-bar pill language.
                       color: live
-                          ? SakuraColors.primary
-                          : SakuraColors.inkSoft,
+                          ? SakuraColors.primarySoft
+                          : SakuraColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: SakuraColors.cardBorder),
+                    ),
+                    child: Text(
+                      pending > 0 ? '$label · retry' : label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: live
+                            ? SakuraColors.primary
+                            : SakuraColors.inkSoft,
+                      ),
                     ),
                   ),
                 ),
@@ -1721,7 +1741,10 @@ class _SyncBanner extends StatelessWidget {
               Padding(
                 padding:
                     const EdgeInsets.only(top: 6, left: 20, right: 20),
-                child: Text(note!,
+                child: Text(
+                    pending > 0
+                        ? 'API offline — $pending change${pending == 1 ? '' : 's'} saved on this phone, will send when online. Tap the pill to retry.'
+                        : note!,
                     style: TextStyle(
                         fontSize: 11, color: SakuraColors.inkSoft)),
               ),

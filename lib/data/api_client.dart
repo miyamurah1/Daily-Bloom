@@ -39,6 +39,28 @@ class BloomApi {
     }
   }
 
+  /// Unauthenticated backend probe for the Settings connection row.
+  /// GET /health needs no token — reports DB + Firebase-Admin state so
+  /// users can tell "no network" from "server down" from "DB down".
+  Future<HealthProbe> probeHealth() async {
+    final uri = Uri.parse('$baseUrl/health');
+    final res =
+        await _client.get(uri).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200) {
+      try {
+        final j = jsonDecode(res.body) as Map<String, dynamic>;
+        return HealthProbe(
+          ok: j['ok'] == true,
+          firebaseReady: j['firebaseReady'] == true,
+          detail: j['firebaseCredentialSource']?.toString(),
+        );
+      } catch (_) {
+        return const HealthProbe(ok: true, firebaseReady: false);
+      }
+    }
+    return HealthProbe(ok: false, firebaseReady: false, detail: 'HTTP ${res.statusCode}');
+  }
+
   Future<List<Task>> fetchTasks(
       {String? status,
       String? folder,
@@ -1039,6 +1061,15 @@ String _fmtDuration(double hours) {
     return m == 0 ? '${h}h' : '${h}h ${m}m';
   }
   return '${(hours / 24).toStringAsFixed(1)} days';
+}
+
+/// Result of an unauthenticated GET /health probe (Settings row).
+class HealthProbe {
+  final bool ok;
+  final bool firebaseReady;
+  final String? detail;
+
+  const HealthProbe({required this.ok, required this.firebaseReady, this.detail});
 }
 
 /// Rule-based personal feedback. Pure function of [Insights] — no ML,

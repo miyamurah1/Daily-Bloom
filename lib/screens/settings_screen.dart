@@ -11,9 +11,11 @@ import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/calendar_export.dart';
 import '../data/crash_reports.dart';
+import '../data/haptics.dart';
 import '../data/habit_store.dart';
 import '../data/mock_data.dart';
 import '../data/reminders.dart';
+import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../game/game.dart';
 
@@ -42,6 +44,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _reminderOn = false;
   bool _reminderBusy = false;
   bool _crashOn = true;
+  bool _tapSoundOn = true;
+
+  /// Connection probe state: null = not yet tested this visit.
+  bool? _connectionOk;
+  String? _connectionDetail;
+  bool _probing = false;
 
   /// Sync issues: pending + dead-letter counts for the Settings row.
   int _pending = 0;
@@ -59,6 +67,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     CrashReports.enabled().then((v) {
       if (mounted) setState(() => _crashOn = v);
     });
+    TapSound.load().then((_) {
+      if (mounted) setState(() => _tapSoundOn = TapSound.enabled);
+    });
+  }
+
+  Future<void> _toggleTapSound(bool value) async {
+    AppHaptics.tap();
+    await TapSound.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _tapSoundOn = value);
+    if (value) await TapSound.tap();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(value
+              ? 'Gentle sounds on — taps will whisper.'
+              : 'Gentle sounds off — silent touches.')),
+    );
+  }
+
+  /// Probe the baked-in backend: GET /health with a short timeout.
+  /// Distinguishes "no network" from "server down" from "DB down" so
+  /// the user knows which gate is closed (the localhost-APK trap).
+  Future<void> _probeConnection() async {
+    AppHaptics.tap();
+    setState(() {
+      _probing = true;
+      _connectionOk = null;
+      _connectionDetail = null;
+    });
+    try {
+      final res = await BloomApi()
+          .probeHealth()
+          .timeout(const Duration(seconds: 12));
+      if (!mounted) return;
+      setState(() {
+        _connectionOk = res.ok;
+        _connectionDetail = res.ok
+            ? (res.firebaseReady
+                ? 'Backend + database + login all green.'
+                : 'Backend reachable, but login service is down — tasks sync, sign-in may fail.')
+            : 'Server answered but the database is down (${res.detail ?? 'unknown'}).';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      final msg = '$e';
+      setState(() {
+        _connectionOk = false;
+        _connectionDetail = msg.contains('SocketException') ||
+                msg.contains('Failed host lookup') ||
+                msg.contains('Connection refused')
+            ? 'Cannot reach ${BloomApi.baseUrl} — check the baked-in URL or your network.'
+            : 'Probe failed: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _probing = false);
+    }
   }
 
   Future<void> _toggleCrash(bool value) async {
@@ -849,6 +914,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _crashOn,
                   onChanged: (v) => _toggleCrash(v),
                   activeThumbColor: SakuraColors.primary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(LucideIcons.wifi,
+                        size: 13, color: SakuraColors.inkFaint),
+                    const SizedBox(width: 7),
+                    Text(
+                      'CONNECTION',
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700,
+                        color: SakuraColors.inkFaint,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  BloomApi.baseUrl,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: SakuraColors.inkSoft),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _connectionOk == null
+                      ? 'Untested this visit — tap Test to check the backend, database and login service.'
+                      : (_connectionOk!
+                          ? _connectionDetail ?? 'All green.'
+                          : _connectionDetail ?? 'Unreachable.'),
+                  style: TextStyle(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: _connectionOk == null
+                          ? SakuraColors.inkSoft
+                          : (_connectionOk!
+                              ? SakuraColors.primary
+                              : _danger)),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _probing ? null : _probeConnection,
+                    icon: _probing
+                        ? const SizedBox(
+                            height: 14,
+                            width: 14,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(LucideIcons.activity, size: 14),
+                    label: Text(_probing ? 'Testing…' : 'Test connection'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(LucideIcons.volume2,
+                        size: 13, color: SakuraColors.inkFaint),
+                    const SizedBox(width: 7),
+                    Text(
+                      'SOUNDS',
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 1.6,
+                        fontWeight: FontWeight.w700,
+                        color: SakuraColors.inkFaint,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Gentle sounds',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            'Soft blip on Plant and Done. Focus bell and rain are separate.',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: SakuraColors.inkSoft),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _tapSoundOn,
+                      onChanged: (v) => _toggleTapSound(v),
+                      activeThumbColor: SakuraColors.primary,
+                    ),
+                  ],
                 ),
               ],
             ),
