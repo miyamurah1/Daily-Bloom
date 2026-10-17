@@ -103,7 +103,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             Text(
               'INSIGHTS',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: 3.2,
                 fontWeight: FontWeight.w600,
                 color: SakuraColors.inkFaint,
@@ -456,7 +456,7 @@ class _Stat extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 10,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w600,
               color: SakuraColors.inkFaint,
@@ -571,10 +571,14 @@ class _NarrativeCardState extends State<_NarrativeCard> {
               GestureDetector(
                 onTap: _loading ? null : () => _load(refresh: true),
                 behavior: HitTestBehavior.opaque,
-                child: Icon(
-                  LucideIcons.refreshCw,
-                  size: 13,
-                  color: SakuraColors.primary,
+                child: Semantics(
+                  button: true,
+                  label: 'Refresh insights',
+                  child: Icon(
+                    LucideIcons.refreshCw,
+                    size: 13,
+                    color: SakuraColors.primary,
+                  ),
                 ),
               ),
             ],

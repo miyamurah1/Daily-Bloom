@@ -125,7 +125,7 @@ class ContributionHeatmap extends StatelessWidget {
                         child: Text(
                           show ? label : '',
                           style: TextStyle(
-                            fontSize: 9,
+                            fontSize: 10,
                             color: SakuraColors.inkFaint,
                           ),
                         ),

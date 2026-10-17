@@ -313,16 +313,19 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
                         ),
                       ),
                       _topIcon(LucideIcons.minus,
-                          () => _step(-1)),
+                          () => _step(-1),
+                          label: 'Shorter session'),
                       const SizedBox(width: 10),
                       _topIcon(LucideIcons.plus,
-                          () => _step(1)),
+                          () => _step(1),
+                          label: 'Longer session'),
                       const SizedBox(width: 10),
                       _topIcon(
                           _immersive
                               ? LucideIcons.minimize2
                               : LucideIcons.maximize2,
-                          _toggleImmersive),
+                          _toggleImmersive,
+                          label: 'Toggle immersive mode'),
                     ],
                   ),
                 ),
@@ -667,18 +670,23 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
     );
   }
 
-  Widget _topIcon(IconData icon, VoidCallback onTap) {
+  Widget _topIcon(IconData icon, VoidCallback onTap,
+      {required String label}) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white70, width: 1.2),
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white70, width: 1.2),
+          ),
+          child: Icon(icon, size: 19, color: Colors.white70),
         ),
-        child: Icon(icon, size: 19, color: Colors.white70),
       ),
     );
   }

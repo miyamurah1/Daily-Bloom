@@ -367,6 +367,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 labelText: 'Password',
                                 border: const OutlineInputBorder(),
                                 suffixIcon: IconButton(
+                                  tooltip: _obscure
+                                      ? 'Show password'
+                                      : 'Hide password',
                                   icon: Icon(_obscure
                                       ? LucideIcons.eyeOff
                                       : LucideIcons.eye),

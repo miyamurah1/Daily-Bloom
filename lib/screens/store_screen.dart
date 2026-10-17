@@ -176,7 +176,7 @@ class _StoreScreenState extends State<StoreScreen> {
             Text(
               'THEME STORE',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: 3.2,
                 fontWeight: FontWeight.w600,
                 color: SakuraColors.inkFaint,

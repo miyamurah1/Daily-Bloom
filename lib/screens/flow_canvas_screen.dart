@@ -357,7 +357,7 @@ class _FlowCanvasScreenState extends State<FlowCanvasScreen> {
                   Text(
                     'TASK • ${t.tag.toUpperCase()}',
                     style: TextStyle(
-                      fontSize: 9.5,
+                      fontSize: 10,
                       letterSpacing: 1.6,
                       fontWeight: FontWeight.w800,
                       color: Colors.white.withValues(alpha: 0.85),
@@ -439,16 +439,20 @@ class _FlowCanvasScreenState extends State<FlowCanvasScreen> {
           GestureDetector(
             onTap: () => _openTimer(t),
             behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: SakuraColors.primary, width: 1.5),
+            child: Semantics(
+              button: true,
+              label: 'Start focus timer',
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: SakuraColors.primary, width: 1.5),
+                ),
+                child: Icon(LucideIcons.timer,
+                    size: 13, color: SakuraColors.primary),
               ),
-              child: Icon(LucideIcons.timer,
-                  size: 13, color: SakuraColors.primary),
             ),
           ),
         ],

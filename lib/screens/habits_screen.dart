@@ -237,7 +237,7 @@ class _GoalGroup extends StatelessWidget {
                 // The name IS the edit affordance — no hunting in ⋯.
                 onTap: () => showGoalSheet(context, goal: goal),
                 behavior: HitTestBehavior.opaque,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('GOAL', style: TextStyle(fontSize: 9.5, letterSpacing: 2.2, fontWeight: FontWeight.w700, color: accent)), const SizedBox(height: 2), Text(goal.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: SakuraColors.ink))]),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('GOAL', style: TextStyle(fontSize: 10, letterSpacing: 2.2, fontWeight: FontWeight.w700, color: accent)), const SizedBox(height: 2), Text(goal.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: SakuraColors.ink))]),
               )),
               if (active.isNotEmpty) Text('$done/${active.length}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: SakuraColors.inkSoft, fontFeatures: const [FontFeature.tabularFigures()])),
               PopupMenuButton<String>(icon: Icon(LucideIcons.ellipsis, size: 17, color: SakuraColors.inkFaint), color: SakuraColors.surface, onSelected: (v) {
@@ -295,8 +295,8 @@ class _UngroupedGroup extends StatelessWidget {
             Row(children: [
               Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: SakuraColors.inkFaint.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14), border: Border.all(color: SakuraColors.cardBorder)), child: Icon(LucideIcons.inbox, size: 19, color: SakuraColors.inkSoft)),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STANDALONE', style: TextStyle(fontSize: 9.5, letterSpacing: 2.2, fontWeight: FontWeight.w700, color: SakuraColors.inkFaint)), const SizedBox(height: 2), Text('Ungrouped', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: SakuraColors.ink))])),
-              GestureDetector(onTap: () => showHabitSheet(context), behavior: HitTestBehavior.opaque, child: Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: SakuraColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(LucideIcons.plus, size: 15, color: SakuraColors.primary))),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STANDALONE', style: TextStyle(fontSize: 10, letterSpacing: 2.2, fontWeight: FontWeight.w700, color: SakuraColors.inkFaint)), const SizedBox(height: 2), Text('Ungrouped', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: SakuraColors.ink))])),
+              GestureDetector(onTap: () => showHabitSheet(context), behavior: HitTestBehavior.opaque, child: Semantics(button: true, label: 'Add habit', child: Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: SakuraColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(LucideIcons.plus, size: 15, color: SakuraColors.primary)))),
             ]),
             const SizedBox(height: 12),
             for (var i = 0; i < habits.length; i++) ...[
@@ -368,11 +368,11 @@ class HabitRow extends StatelessWidget {
             if (habit.counted && !habit.paused) ...[
               const SizedBox(height: 10),
               Row(children: [
-                _stepBtn(icon: LucideIcons.minus, onTap: () => store.logToday(habit.id, -1)),
+                _stepBtn(icon: LucideIcons.minus, label: 'Log less today', onTap: () => store.logToday(habit.id, -1)),
                 const SizedBox(width: 8),
                 Expanded(child: TweenAnimationBuilder<double>(tween: Tween(begin: 0, end: frac), duration: AppMotion.progress, curve: AppMotion.progressCurve, builder: (context, v, _) => ClipRRect(borderRadius: BorderRadius.circular(5), child: LinearProgressIndicator(value: v, minHeight: 7, backgroundColor: SakuraColors.primarySoft, valueColor: AlwaysStoppedAnimation<Color>(done ? accent : SakuraColors.primary))))),
                 const SizedBox(width: 8),
-                _stepBtn(icon: LucideIcons.plus, primary: true, onTap: () => store.logToday(habit.id, 1)),
+                _stepBtn(icon: LucideIcons.plus, primary: true, label: 'Log more today', onTap: () => store.logToday(habit.id, 1)),
               ]),
             ],
           ]),
@@ -380,8 +380,8 @@ class HabitRow extends StatelessWidget {
       ),
     );
   }
-  Widget _stepBtn({required IconData icon, required VoidCallback onTap, bool primary = false}) {
-    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Container(width: 30, height: 30, alignment: Alignment.center, decoration: BoxDecoration(color: primary ? SakuraColors.primary : SakuraColors.surface, shape: BoxShape.circle, border: Border.all(color: primary ? SakuraColors.primary : SakuraColors.cardBorder)), child: Icon(icon, size: 14, color: primary ? Colors.white : SakuraColors.inkSoft)));
+  Widget _stepBtn({required IconData icon, required VoidCallback onTap, bool primary = false, required String label}) {
+    return GestureDetector(onTap: onTap, behavior: HitTestBehavior.opaque, child: Semantics(button: true, label: label, child: Container(width: 30, height: 30, alignment: Alignment.center, decoration: BoxDecoration(color: primary ? SakuraColors.primary : SakuraColors.surface, shape: BoxShape.circle, border: Border.all(color: primary ? SakuraColors.primary : SakuraColors.cardBorder)), child: Icon(icon, size: 14, color: primary ? Colors.white : SakuraColors.inkSoft))));
   }
 }
 /// Thaw flow shared by the row pill and the edit sheet: confirm, spend,
@@ -434,14 +434,14 @@ Future<void> showGoalSheet(BuildContext context, {HabitGoal? goal}) async {
           _sheetLabel('ICON'),
           Wrap(spacing: 8, runSpacing: 8, children: List.generate(_habitIcons.length, (i) {
             final sel = i == icon;
-            return GestureDetector(onTap: () => setSheet(() => icon = i), behavior: HitTestBehavior.opaque, child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: sel ? SakuraColors.primary.withValues(alpha: 0.12) : SakuraColors.background, borderRadius: BorderRadius.circular(13), border: Border.all(color: sel ? SakuraColors.primary : SakuraColors.cardBorder, width: sel ? 1.6 : 1)), child: Icon(_habitIcons[i], size: 18, color: sel ? SakuraColors.primary : SakuraColors.inkSoft)));
+            return GestureDetector(onTap: () => setSheet(() => icon = i), behavior: HitTestBehavior.opaque, child: Semantics(button: true, label: 'Choose icon ${i + 1}', child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: sel ? SakuraColors.primary.withValues(alpha: 0.12) : SakuraColors.background, borderRadius: BorderRadius.circular(13), border: Border.all(color: sel ? SakuraColors.primary : SakuraColors.cardBorder, width: sel ? 1.6 : 1)), child: Icon(_habitIcons[i], size: 18, color: sel ? SakuraColors.primary : SakuraColors.inkSoft))));
           })),
           const SizedBox(height: 12),
           _sheetLabel('ACCENT'),
           Wrap(spacing: 8, children: List.generate(4, (i) {
             final sel = i == accent;
             final c = i == 0 ? SakuraColors.primary : i == 1 ? const Color(0xFF4CAF7D) : i == 2 ? const Color(0xFF4A9ED5) : const Color(0xFFE8A33D);
-            return GestureDetector(onTap: () => setSheet(() => accent = i), behavior: HitTestBehavior.opaque, child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: c.withValues(alpha: sel ? 0.2 : 0.1), shape: BoxShape.circle, border: Border.all(color: sel ? c : Colors.transparent, width: 2)), child: Container(width: 16, height: 16, decoration: BoxDecoration(color: c, shape: BoxShape.circle))));
+            return GestureDetector(onTap: () => setSheet(() => accent = i), behavior: HitTestBehavior.opaque, child: Semantics(button: true, label: 'Accent color ${i + 1}', child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: c.withValues(alpha: sel ? 0.2 : 0.1), shape: BoxShape.circle, border: Border.all(color: sel ? c : Colors.transparent, width: 2)), child: Container(width: 16, height: 16, decoration: BoxDecoration(color: c, shape: BoxShape.circle)))));
           })),
           const SizedBox(height: 18),
           SizedBox(width: double.infinity, child: FilledButton(onPressed: nameCtrl.text.trim().isEmpty ? null : () => Navigator.pop(ctx, true), style: FilledButton.styleFrom(backgroundColor: SakuraColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)), child: Text(goal == null ? 'Create goal' : 'Save changes', style: const TextStyle(fontWeight: FontWeight.w700)))),
@@ -549,7 +549,7 @@ Future<void> showHabitSheet(BuildContext context, {Habit? habit, String? goalId}
             _sheetLabel('ICON'),
             Wrap(spacing: 8, runSpacing: 8, children: List.generate(_habitIcons.length, (i) {
               final sel = i == icon;
-              return GestureDetector(onTap: () => setSheet(() => icon = i), child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: sel ? SakuraColors.primary.withValues(alpha: 0.12) : SakuraColors.background, borderRadius: BorderRadius.circular(13), border: Border.all(color: sel ? SakuraColors.primary : SakuraColors.cardBorder)), child: Icon(_habitIcons[i], size: 18, color: sel ? SakuraColors.primary : SakuraColors.inkSoft)));
+              return GestureDetector(onTap: () => setSheet(() => icon = i), child: Semantics(button: true, label: 'Choose icon ${i + 1}', child: Container(width: 42, height: 42, alignment: Alignment.center, decoration: BoxDecoration(color: sel ? SakuraColors.primary.withValues(alpha: 0.12) : SakuraColors.background, borderRadius: BorderRadius.circular(13), border: Border.all(color: sel ? SakuraColors.primary : SakuraColors.cardBorder)), child: Icon(_habitIcons[i], size: 18, color: sel ? SakuraColors.primary : SakuraColors.inkSoft))));
             })),
             const SizedBox(height: 18),
             SizedBox(width: double.infinity, child: FilledButton(onPressed: nameCtrl.text.trim().isNotEmpty ? () => Navigator.pop(ctx, true) : null, style: FilledButton.styleFrom(backgroundColor: SakuraColors.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), padding: const EdgeInsets.symmetric(vertical: 14)), child: Text(habit == null ? 'Create habit' : 'Save changes', style: const TextStyle(fontWeight: FontWeight.w700)))),

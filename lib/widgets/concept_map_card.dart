@@ -68,12 +68,16 @@ class ConceptMapCard extends StatelessWidget {
               GestureDetector(
                 onTap: onDismiss,
                 behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    LucideIcons.x,
-                    size: 16,
-                    color: SakuraColors.inkFaint,
+                child: Semantics(
+                  button: true,
+                  label: 'Dismiss',
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      LucideIcons.x,
+                      size: 16,
+                      color: SakuraColors.inkFaint,
+                    ),
                   ),
                 ),
               ),

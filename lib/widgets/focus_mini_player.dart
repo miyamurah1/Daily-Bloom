@@ -91,30 +91,42 @@ class FocusMiniPlayer extends StatelessWidget {
               GestureDetector(
                 onTap: () =>
                     fc.paused ? fc.resume() : fc.pause(),
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(
-                      fc.paused
-                          ? Icons.play_circle_outline
-                          : Icons.pause_circle_outline,
-                      size: 22,
-                      color: Colors.white),
+                child: Semantics(
+                  button: true,
+                  label: fc.paused ? 'Resume session' : 'Pause session',
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(
+                        fc.paused
+                            ? Icons.play_circle_outline
+                            : Icons.pause_circle_outline,
+                        size: 22,
+                        color: Colors.white),
+                  ),
                 ),
               ),
               GestureDetector(
                 onTap: fc.busy ? null : () => fc.finish(),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(Icons.check_circle_outline,
-                      size: 22, color: Colors.white),
+                child: Semantics(
+                  button: true,
+                  label: 'Finish session',
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.check_circle_outline,
+                        size: 22, color: Colors.white),
+                  ),
                 ),
               ),
               GestureDetector(
                 onTap: fc.busy ? null : () => fc.abandon(),
-                child: const Padding(
-                  padding: EdgeInsets.all(6),
-                  child: Icon(Icons.cancel_outlined,
-                      size: 20, color: Colors.white70),
+                child: Semantics(
+                  button: true,
+                  label: 'Abandon session',
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.cancel_outlined,
+                        size: 20, color: Colors.white70),
+                  ),
                 ),
               ),
             ],

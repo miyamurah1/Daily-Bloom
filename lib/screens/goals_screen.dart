@@ -221,12 +221,16 @@ class _GoalCard extends StatelessWidget {
               GestureDetector(
                 onTap: onDelete,
                 behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    LucideIcons.trash2,
-                    size: 15,
-                    color: SakuraColors.inkFaint,
+                child: Semantics(
+                  button: true,
+                  label: 'Delete',
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      LucideIcons.trash2,
+                      size: 15,
+                      color: SakuraColors.inkFaint,
+                    ),
                   ),
                 ),
               ),
@@ -467,6 +471,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                         color: SakuraColors.ink)),
               ),
               IconButton(
+                tooltip: 'Close',
                 onPressed: () => Navigator.of(context).pop(false),
                 icon: Icon(Icons.close,
                     size: 18, color: SakuraColors.inkSoft),
@@ -518,9 +523,13 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                   if (_target != null)
                     GestureDetector(
                       onTap: () => setState(() => _target = null),
-                      child: Icon(LucideIcons.x,
-                          size: 14,
-                          color: SakuraColors.inkFaint),
+                      child: Semantics(
+                        button: true,
+                        label: 'Clear target',
+                        child: Icon(LucideIcons.x,
+                            size: 14,
+                            color: SakuraColors.inkFaint),
+                      ),
                     ),
                 ],
               ),
@@ -552,6 +561,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                   ),
                   if (_steps.length > 1)
                     IconButton(
+                      tooltip: 'Remove step',
                       onPressed: () => setState(() {
                         _steps.removeAt(i).dispose();
                       }),

@@ -230,7 +230,7 @@ class _InboxScreenState extends State<InboxScreen> {
                                 child: Text(
                                   '$_unreadCount',
                                   style: const TextStyle(
-                                    fontSize: 9,
+                                    fontSize: 10,
                                     fontWeight:
                                         FontWeight.w800,
                                     color: Colors.white,

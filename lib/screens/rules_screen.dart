@@ -229,6 +229,7 @@ class _RulesScreenState extends State<RulesScreen> {
                         ),
                       ),
                       IconButton(
+                        tooltip: 'Close',
                         onPressed: () =>
                             Navigator.of(ctx).pop(),
                         icon: Icon(Icons.close,
@@ -692,18 +693,22 @@ class _RulesScreenState extends State<RulesScreen> {
                   GestureDetector(
                     onTap: _quickCreate,
                     behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: SakuraColors.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: SakuraColors.cardBorder),
-                        ),
-                        child: Icon(
-                          LucideIcons.plus,
-                          size: 18,
-                          color: SakuraColors.primary,
+                      child: Semantics(
+                        button: true,
+                        label: 'Create rule',
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: SakuraColors.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: SakuraColors.cardBorder),
+                          ),
+                          child: Icon(
+                            LucideIcons.plus,
+                            size: 18,
+                            color: SakuraColors.primary,
+                          ),
                         ),
                       ),
                   ),
@@ -843,6 +848,7 @@ class _RulesScreenState extends State<RulesScreen> {
                             ),
                             const Spacer(),
                             IconButton(
+                              tooltip: 'Delete rule',
                               onPressed: () => _delete(r),
                               icon: Icon(
                                   LucideIcons.trash2,

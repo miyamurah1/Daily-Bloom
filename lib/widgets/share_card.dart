@@ -157,7 +157,7 @@ class ShareCard extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 10,
             letterSpacing: 1.6,
             fontWeight: FontWeight.w600,
             color: SakuraColors.inkFaint,

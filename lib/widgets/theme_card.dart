@@ -302,7 +302,7 @@ class _ThemeCardState extends State<ThemeCard>
                     child: Text(
                       '✦ LEGENDARY',
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         letterSpacing: 2.2,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFFFFD54F),
@@ -419,7 +419,7 @@ class _PreviewButton extends StatelessWidget {
               Text(
                 'PREVIEW',
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.8,
                   color: Colors.white,

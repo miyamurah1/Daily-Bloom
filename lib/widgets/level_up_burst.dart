@@ -70,7 +70,8 @@ class _LevelUpBurstState extends State<LevelUpBurst>
       CurvedAnimation(
           parent: _c, curve: const Interval(0.0, 0.35, curve: Curves.easeOut)),
     );
-    _c.forward();
+    // Forwarding moves to didChangeDependencies: reduced-motion users get
+    // the celebration card in its settled state (info, no fly-in).
     Future.delayed(
       AppMotion.burst + AppMotion.burstHold,
       () {
@@ -79,6 +80,17 @@ class _LevelUpBurstState extends State<LevelUpBurst>
         }
       },
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery is first legal to read here (not initState).
+    if (AppMotion.reduced(context)) {
+      _c.value = 1; // settled card, no fly-in animation.
+    } else {
+      _c.forward();
+    }
   }
 
   @override

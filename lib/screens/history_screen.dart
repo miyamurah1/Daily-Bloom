@@ -171,7 +171,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Text(
                     'HISTORY',
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 10,
                       letterSpacing: 3.2,
                       fontWeight: FontWeight.w600,
                       color: SakuraColors.inkFaint,

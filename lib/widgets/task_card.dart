@@ -139,7 +139,7 @@ class _TaskCardState extends State<TaskCard> {
                     child: Text(
                       widget.task.priority.toUpperCase(),
                       style: TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         color: widget.task.priority == 'high'
                             ? SakuraColors.primary
@@ -177,7 +177,7 @@ class _TaskCardState extends State<TaskCard> {
                             Text(
                               energyLabel(level).toUpperCase(),
                               style: TextStyle(
-                                fontSize: 9,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 color: SakuraColors.tagText,
                               ),
@@ -281,7 +281,7 @@ class _TaskCardState extends State<TaskCard> {
                               child: Text(
                                 overdue ? 'OVERDUE' : 'DUE TODAY',
                                 style: TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   letterSpacing: 1.2,
                                   fontWeight: FontWeight.w800,
                                   color: overdue
@@ -320,12 +320,16 @@ class _TaskCardState extends State<TaskCard> {
                 GestureDetector(
                   onTap: widget.onOpen,
                   behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      LucideIcons.chevronRight,
-                      size: 18,
-                      color: SakuraColors.inkFaint,
+                  child: Semantics(
+                    button: true,
+                    label: 'Open task',
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        LucideIcons.chevronRight,
+                        size: 18,
+                        color: SakuraColors.inkFaint,
+                      ),
                     ),
                   ),
                 ),

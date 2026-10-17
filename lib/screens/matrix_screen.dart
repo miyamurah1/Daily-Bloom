@@ -121,7 +121,7 @@ class _MatrixScreenState extends State<MatrixScreen> {
             Text(
               'BOARD • $today',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: 2.2,
                 fontWeight: FontWeight.w600,
                 color: SakuraColors.inkFaint,

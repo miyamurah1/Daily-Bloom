@@ -98,15 +98,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ? null
             : GestureDetector(
           onTap: () => Navigator.of(context).pop(),
-          child: Container(
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: SakuraColors.surface,
-              shape: BoxShape.circle,
-              border: Border.all(color: SakuraColors.cardBorder),
+          child: Semantics(
+            button: true,
+            label: 'Back',
+            child: Container(
+              margin: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: SakuraColors.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: SakuraColors.cardBorder),
+              ),
+              child: Icon(LucideIcons.arrowLeft,
+                  size: 18, color: SakuraColors.ink),
             ),
-            child: Icon(LucideIcons.arrowLeft,
-                size: 18, color: SakuraColors.ink),
           ),
         ),
         title: Column(
@@ -125,7 +129,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             Text(
               'WEEKLY REVIEW · ${reviewWeekLabel().toUpperCase()}',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: 3.2,
                 fontWeight: FontWeight.w600,
                 color: SakuraColors.inkFaint,
@@ -263,7 +267,7 @@ class _Stat extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 10,
               letterSpacing: 1.6,
               fontWeight: FontWeight.w600,
               color: SakuraColors.inkFaint,

@@ -218,18 +218,22 @@ class _FoldersScreenState extends State<FoldersScreen> {
                   GestureDetector(
                     onTap: _addFolder,
                     behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: SakuraColors.surface,
-                        shape: BoxShape.circle,
-                        border:
-                            Border.all(color: SakuraColors.cardBorder),
-                      ),
-                      child: Icon(
-                        LucideIcons.plus,
-                        size: 18,
-                        color: SakuraColors.primary,
+                    child: Semantics(
+                      button: true,
+                      label: 'Add folder',
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: SakuraColors.surface,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: SakuraColors.cardBorder),
+                        ),
+                        child: Icon(
+                          LucideIcons.plus,
+                          size: 18,
+                          color: SakuraColors.primary,
+                        ),
                       ),
                     ),
                   ),

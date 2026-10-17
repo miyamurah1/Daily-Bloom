@@ -243,7 +243,7 @@ class _DailyIntentionCardState extends State<DailyIntentionCard> {
             Text(
               done ? 'REVIEW' : 'OPEN TASK',
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 letterSpacing: 1.6,
                 fontWeight: FontWeight.w800,
                 color: SakuraColors.primary,
@@ -868,6 +868,7 @@ class _TargetEditorSheetState extends State<_TargetEditorSheet> {
                 ),
               ),
               IconButton(
+                tooltip: 'Close',
                 onPressed: () => Navigator.of(context).pop(),
                 icon: Icon(Icons.close,
                     size: 18, color: SakuraColors.inkSoft),
@@ -906,6 +907,7 @@ class _TargetEditorSheetState extends State<_TargetEditorSheet> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
+                  tooltip: 'Decrease goal',
                   onPressed: _goal > _min
                       ? () => setState(() => _goal -= _step)
                       : null,
@@ -934,6 +936,7 @@ class _TargetEditorSheetState extends State<_TargetEditorSheet> {
                   ],
                 ),
                 IconButton(
+                  tooltip: 'Increase goal',
                   onPressed: _goal < _max
                       ? () => setState(() => _goal += _step)
                       : null,

@@ -76,16 +76,20 @@ class _FullBloomPreviewState extends State<FullBloomPreview> {
               elevation: 0,
               leading: GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  margin: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: SakuraColors.surface,
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: SakuraColors.cardBorder),
+                child: Semantics(
+                  button: true,
+                  label: 'Back',
+                  child: Container(
+                    margin: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: SakuraColors.surface,
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: SakuraColors.cardBorder),
+                    ),
+                    child: Icon(Icons.arrow_back,
+                        size: 18, color: SakuraColors.ink),
                   ),
-                  child: Icon(Icons.arrow_back,
-                      size: 18, color: SakuraColors.ink),
                 ),
               ),
               title: Column(
@@ -110,7 +114,7 @@ class _FullBloomPreviewState extends State<FullBloomPreview> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 10,
                       letterSpacing: 2.2,
                       fontWeight: FontWeight.w600,
                       color: SakuraColors.inkFaint,

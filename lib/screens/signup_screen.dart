@@ -147,6 +147,9 @@ class _SignupScreenState extends State<SignupScreen> {
                           labelText: 'Password (min 8 characters)',
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
+                            tooltip: _obscure
+                                ? 'Show password'
+                                : 'Hide password',
                             icon: Icon(_obscure
                                 ? LucideIcons.eyeOff
                                 : LucideIcons.eye),
@@ -171,6 +174,9 @@ class _SignupScreenState extends State<SignupScreen> {
                           labelText: 'Confirm password',
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
+                            tooltip: _obscureConfirm
+                                ? 'Show password'
+                                : 'Hide password',
                             icon: Icon(_obscureConfirm
                                 ? LucideIcons.eyeOff
                                 : LucideIcons.eye),

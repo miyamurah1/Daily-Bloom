@@ -961,12 +961,16 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                               GestureDetector(
                                 onTap: _clearDue,
                                 behavior: HitTestBehavior.opaque,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: Icon(
-                                    LucideIcons.x,
-                                    size: 14,
-                                    color: SakuraColors.inkFaint,
+                                child: Semantics(
+                                  button: true,
+                                  label: 'Clear due date',
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: Icon(
+                                      LucideIcons.x,
+                                      size: 14,
+                                      color: SakuraColors.inkFaint,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1277,6 +1281,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                       ),
                                     ),
                                     IconButton(
+                                      tooltip: 'Delete subtask',
                                       icon: Icon(
                                           LucideIcons.trash2,
                                           size: 15,
