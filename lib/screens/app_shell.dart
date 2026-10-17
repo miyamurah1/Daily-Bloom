@@ -81,10 +81,21 @@ class _AppShellState extends State<AppShell>
     TaskRepository.instance.addListener(_syncWidgetDoneFlags);
   }
 
-  /// Route a widget tap: task deep-link opens its detail, plan jumps to
-  /// Today. Unknown ids land on Today — never a dead tap.
+  /// Route a widget tap: the ✓ button completes its task, a task row
+  /// deep-links into its detail, plan jumps to Today. Unknown ids land
+  /// on Today — never a dead tap.
   void _openWidgetUri(({String type, String? id})? target) {
     if (target == null || !mounted) return;
+    // Launcher ✓ — goes through the repository, so it's optimistic,
+    // offline-queued, XP-awarded and widget-flag-refreshing exactly like
+    // an in-app completion.
+    if (target.type == 'complete' && target.id != null) {
+      AppHaptics.bloom();
+      unawaited(TaskRepository.instance.moveTask(target.id!, 'done'));
+      showBloomSnackBar(context, 'Planted from the widget ✓');
+      _go(0);
+      return;
+    }
     if (target.type == 'plan' || target.id == null) {
       _go(0);
       return;

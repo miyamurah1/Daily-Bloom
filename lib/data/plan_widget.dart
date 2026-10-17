@@ -31,6 +31,11 @@ class PlanWidgetBridge {
   static const String planUri = '$kScheme://plan';
   static String taskUri(String id) => '$kScheme://task/$id';
 
+  /// Widget ✓-button deep link: completing a planned task straight from
+  /// the launcher. Routed in AppShell to `moveTask(id, 'done')` so it
+  /// shares the optimistic repo + offline outbox with in-app taps.
+  static String completeUri(String id) => '$kScheme://complete/$id';
+
   static bool get _supported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -164,12 +169,13 @@ class PlanWidgetBridge {
     refreshDoneFlags();
   }
 
-  /// `dailybloom://task/<id>` or `dailybloom://plan`, else null.
-  /// Pure function — unit-tested, no platform calls.
+  /// `dailybloom://task/<id>`, `dailybloom://complete/<id>` or
+  /// `dailybloom://plan`, else null. Pure function — unit-tested.
   static ({String type, String? id})? parsePlanWidgetUri(Uri? uri) {
     if (uri == null || uri.scheme != kScheme) return null;
-    if (uri.host == 'task' && uri.pathSegments.isNotEmpty) {
-      return (type: 'task', id: uri.pathSegments.first);
+    if ((uri.host == 'task' || uri.host == 'complete') &&
+        uri.pathSegments.isNotEmpty) {
+      return (type: uri.host, id: uri.pathSegments.first);
     }
     if (uri.host == 'plan') return (type: 'plan', id: null);
     return null;

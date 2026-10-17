@@ -7,6 +7,12 @@ void main() {
       PlanWidgetBridge.parsePlanWidgetUri(Uri.parse('dailybloom://task/abc')),
       (type: 'task', id: 'abc'),
     );
+    // The widget's ✓ button: completes the task straight from the launcher.
+    expect(
+      PlanWidgetBridge.parsePlanWidgetUri(
+          Uri.parse('dailybloom://complete/abc')),
+      (type: 'complete', id: 'abc'),
+    );
     expect(
       PlanWidgetBridge.parsePlanWidgetUri(Uri.parse('dailybloom://plan')),
       (type: 'plan', id: null),

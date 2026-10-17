@@ -36,81 +36,130 @@
         android:id="@+id/plan_row_0"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingTop="6dp">
-        <TextView
-            android:id="@+id/plan_title_0"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#F2EFFA"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="1. Prepare demo slides" />
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/plan_title_0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#F2EFFA"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="1. Prepare demo slides" />
+            <TextView
+                android:id="@+id/plan_reason_0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#A79FC4"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="due soon" />
+        </LinearLayout>
+        <!-- One-tap completion: done straight from the launcher. -->
         <TextView
-            android:id="@+id/plan_reason_0"
-            android:layout_width="match_parent"
+            android:id="@+id/plan_check_0"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="#A79FC4"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="due soon" />
+            android:paddingStart="8dp"
+            android:paddingEnd="2dp"
+            android:textSize="18sp"
+            android:textColor="#E84A6B"
+            tools:text="✓" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/plan_row_1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingTop="6dp">
-        <TextView
-            android:id="@+id/plan_title_1"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#F2EFFA"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="2. Grocery run" />
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/plan_title_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#F2EFFA"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="2. Grocery run" />
+            <TextView
+                android:id="@+id/plan_reason_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#A79FC4"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="small win" />
+        </LinearLayout>
         <TextView
-            android:id="@+id/plan_reason_1"
-            android:layout_width="match_parent"
+            android:id="@+id/plan_check_1"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="#A79FC4"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="small win" />
+            android:paddingStart="8dp"
+            android:paddingEnd="2dp"
+            android:textSize="18sp"
+            android:textColor="#E84A6B"
+            tools:text="✓" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/plan_row_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingTop="6dp">
-        <TextView
-            android:id="@+id/plan_title_2"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="#F2EFFA"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="3. Morning run" />
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/plan_title_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#F2EFFA"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="3. Morning run" />
+            <TextView
+                android:id="@+id/plan_reason_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#A79FC4"
+                android:maxLines="1"
+                android:ellipsize="end"
+                tools:text="already started" />
+        </LinearLayout>
         <TextView
-            android:id="@+id/plan_reason_2"
-            android:layout_width="match_parent"
+            android:id="@+id/plan_check_2"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="#A79FC4"
-            android:maxLines="1"
-            android:ellipsize="end"
-            tools:text="already started" />
+            android:paddingStart="8dp"
+            android:paddingEnd="2dp"
+            android:textSize="18sp"
+            android:textColor="#E84A6B"
+            tools:text="✓" />
     </LinearLayout>
 
     <TextView

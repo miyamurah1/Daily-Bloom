@@ -44,8 +44,13 @@ class WeeklyReview {
     this.habitsTotal = 0,
     this.streakCurrent = 0,
     this.streakBest = 0,
+    this.dailyCounts = const [],
     required this.verdict,
   });
+
+  /// Completions per weekday (Mon→Sun). Powers the share card's
+  /// week-bloom; empty for reviews built before this field existed.
+  final List<int> dailyCounts;
 
   bool get isEmpty =>
       doneCount == 0 && focusMinutes == 0 && habitsKept == 0;
@@ -100,9 +105,11 @@ WeeklyReview buildWeeklyReview({
   }
   String? bestDay;
   var bestDayCount = 0;
+  final daily = List<int>.filled(7, 0);
   for (var i = 0; i < 7; i++) {
     final d = mon.add(Duration(days: i));
     final n = byDay[HabitStore.dayKey(d)] ?? 0;
+    daily[i] = n;
     if (n > bestDayCount) {
       bestDayCount = n;
       bestDay = _weekdays[i];
@@ -170,6 +177,7 @@ WeeklyReview buildWeeklyReview({
     habitsTotal: live.length,
     streakCurrent: ins.streakCurrent,
     streakBest: ins.streakBest30,
+    dailyCounts: daily,
     verdict: verdict,
   );
 }

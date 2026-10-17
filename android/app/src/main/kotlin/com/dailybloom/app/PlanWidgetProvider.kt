@@ -47,9 +47,9 @@ class PlanWidgetProvider : HomeWidgetProvider() {
 
                     val count = widgetData.getInt("plan_count", 0)
                     val rows = listOf(
-                        RowViews(R.id.plan_row_0, R.id.plan_title_0, R.id.plan_reason_0),
-                        RowViews(R.id.plan_row_1, R.id.plan_title_1, R.id.plan_reason_1),
-                        RowViews(R.id.plan_row_2, R.id.plan_title_2, R.id.plan_reason_2),
+                        RowViews(R.id.plan_row_0, R.id.plan_title_0, R.id.plan_reason_0, R.id.plan_check_0),
+                        RowViews(R.id.plan_row_1, R.id.plan_title_1, R.id.plan_reason_1, R.id.plan_check_1),
+                        RowViews(R.id.plan_row_2, R.id.plan_title_2, R.id.plan_reason_2, R.id.plan_check_2),
                     )
                     if (count <= 0) {
                         setViewVisibility(R.id.plan_empty, View.VISIBLE)
@@ -83,6 +83,24 @@ class PlanWidgetProvider : HomeWidgetProvider() {
                                         Uri.parse("dailybloom://task/$id"),
                                     ),
                                 )
+                                // One-tap completion from the launcher.
+                                // Done rows drop the button (the ✓ prefix
+                                // already says it); its PendingIntent uses
+                                // a 200+i request code so it never collapses
+                                // onto the row's own tap intent.
+                                if (done || id.isEmpty()) {
+                                    setViewVisibility(row.check, View.GONE)
+                                } else {
+                                    setViewVisibility(row.check, View.VISIBLE)
+                                    setOnClickPendingIntent(
+                                        row.check,
+                                        launchIntent(
+                                            context,
+                                            200 + i,
+                                            Uri.parse("dailybloom://complete/$id"),
+                                        ),
+                                    )
+                                }
                             } else {
                                 setViewVisibility(row.row, View.GONE)
                             }
@@ -109,5 +127,5 @@ class PlanWidgetProvider : HomeWidgetProvider() {
         return PendingIntent.getActivity(context, requestCode, intent, flags)
     }
 
-    private data class RowViews(val row: Int, val title: Int, val reason: Int)
+    private data class RowViews(val row: Int, val title: Int, val reason: Int, val check: Int)
 }

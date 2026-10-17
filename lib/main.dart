@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,51 +28,51 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform);
   } catch (_) {}
 
-  // Paint the last-used theme before the first frame — no flash.
-  await ThemeStore.instance.preload();
-
-  // Mindful gamification: restore XP / tokens / streak before first frame.
-  await GamificationStateNotifier.instance.load();
-  GamificationStateNotifier.instance.markDailyActive(null, true);
-
-  // Energy labels are local-first: restore before first frame so cards
-  // never flash unlabeled.
-  await EnergyStore.instance.load();
-
-  // Ambient preference is local-only; the wash itself stays off until a
-  // session starts it.
-  await AmbientSound.load();
-
-  // Gentle tap sounds: on by default (confirmations, not ambience).
-  await TapSound.load();
-
-  // Simple mode (calm home) — restores before any door renders.
-  await SimpleMode.instance.load();
-
-  // Reminder preference restores silently; scheduling re-arms inside
-  // init when enabled (the OS drops alarms on reboot/update).
-  await ReminderService.instance.load();
-  await ReminderService.instance.init();
-  // Keep tomorrow's nudge copy truthful: the daily body tracks the live
-  // streak, so re-arm the (cheap, inexact) alarm on every change.
-  GamificationStateNotifier.onStreakChanged =
-      () => ReminderService.instance.scheduleDaily();
-
-  // Warm the Inter files first paint uses (400/600/700/800) so cold
-  // start never swaps fonts mid-layout. Best-effort with a short cap:
-  // offline boot must never wait on font fetching.
+  // First-frame-critical restores — all independent SharedPreferences
+  // reads plus the font warm-up, run CONCURRENTLY. Serial awaits used
+  // to cost ~8 platform round-trips before the first frame; this costs
+  // one (the slowest single item). The font wait is capped short: an
+  // offline cold start must never sit on a network timeout — missing
+  // Inter falls back to the system face and swaps in when ready.
+  // Every loader degrades internally; the outer guard is belt-and-braces.
   try {
-    await GoogleFonts.pendingFonts([
+    await Future.wait([
+    // Paint the last-used theme before the first frame — no flash.
+    ThemeStore.instance.preload(),
+    // Mindful gamification: restore XP / tokens / streak.
+    GamificationStateNotifier.instance.load(),
+    // Energy labels are local-first: cards never flash unlabeled.
+    EnergyStore.instance.load(),
+    // Ambient preference is local-only; the wash stays off until a
+    // session starts it.
+    AmbientSound.load(),
+    // Gentle tap sounds: on by default (confirmations, not ambience).
+    TapSound.load(),
+    // Simple mode (calm home) — restores before any door renders.
+    SimpleMode.instance.load(),
+    // Reminder preference restores silently; scheduling re-arms inside
+    // init below (the OS drops alarms on reboot/update).
+    ReminderService.instance.load(),
+    // Warm the Inter weights first paint uses (400/600/700/800).
+    GoogleFonts.pendingFonts([
       GoogleFonts.inter(fontWeight: FontWeight.w400),
       GoogleFonts.inter(fontWeight: FontWeight.w600),
       GoogleFonts.inter(fontWeight: FontWeight.w700),
       GoogleFonts.inter(fontWeight: FontWeight.w800),
-    ]).timeout(const Duration(seconds: 4));
-  } catch (_) {
-    // Offline or slow network: fall back to system fonts for this run.
-  }
+    ]).timeout(const Duration(milliseconds: 1200)),
+  ]);
+  } catch (_) {}
+  GamificationStateNotifier.instance.markDailyActive(null, true);
+  // Keep tomorrow's nudge copy truthful: the daily body tracks the live
+  // streak, so re-arm the (cheap, inexact) alarm on every change.
+  GamificationStateNotifier.onStreakChanged =
+      () => ReminderService.instance.scheduleDaily();
+  // Notification plumbing (timezone + plugin + alarm re-arm) is needed
+  // by nothing on the first frame — run it alongside first paint
+  // instead of delaying it. Best-effort inside; degrades to no-op.
+  unawaited(ReminderService.instance.init());
 
-  // Crash reporting last: Sentry wraps runApp when a DSN was baked in
+  // Crash reporting: Sentry wraps runApp when a DSN was baked in
   // AND the user left the Settings toggle on. Otherwise plain runApp.
   await CrashReports.init(() async {
     runApp(const DailyBloomApp());

@@ -94,16 +94,28 @@ struct PlanWidgetEntryView: View {
           .foregroundColor(Color(red: 0.65, green: 0.62, blue: 0.77))
       } else {
         ForEach(entry.rows) { row in
-          Link(destination: URL(string: "dailybloom://task/\(row.id)")!) {
-            VStack(alignment: .leading, spacing: 1) {
-              Text("\(row.done ? "✓ " : "")\(row.title)")
-                .font(.system(size: 13.5, weight: .bold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-              Text(row.reason)
-                .font(.system(size: 11))
-                .foregroundColor(Color(red: 0.65, green: 0.62, blue: 0.77))
-                .lineLimit(1)
+          HStack(spacing: 8) {
+            Link(destination: URL(string: "dailybloom://task/\(row.id)")!) {
+              VStack(alignment: .leading, spacing: 1) {
+                Text("\(row.done ? "✓ " : "")\(row.title)")
+                  .font(.system(size: 13.5, weight: .bold))
+                  .foregroundColor(.white)
+                  .lineLimit(1)
+                Text(row.reason)
+                  .font(.system(size: 11))
+                  .foregroundColor(Color(red: 0.65, green: 0.62, blue: 0.77))
+                  .lineLimit(1)
+              }
+              .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            // One-tap completion from the home screen. Done rows drop
+            // the button — the ✓ prefix already says it.
+            if !row.done && !row.id.isEmpty {
+              Link(destination: URL(string: "dailybloom://complete/\(row.id)")!) {
+                Image(systemName: "checkmark.circle.fill")
+                  .font(.system(size: 15, weight: .semibold))
+                  .foregroundColor(Color(red: 0.91, green: 0.29, blue: 0.42))
+              }
             }
           }
         }

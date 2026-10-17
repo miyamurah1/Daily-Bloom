@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/weekly_review.dart';
@@ -5,14 +7,14 @@ import '../theme/sakura_theme.dart';
 
 /// Shareable week card: the review's headline numbers on a themed
 /// canvas, rendered off-screen into a PNG via [RepaintBoundary].
-/// Pure presentational — takes a [WeeklyReview], paints it, done.
-/// Capture + system share live with the caller (review screen), which
-/// owns the boundary key and the Clipboard fallback.
+/// The centrepiece is a *week-bloom* — seven petals (Mon→Sun) whose
+/// openness and saturation track that day's completions. Purely
+/// presentational; capture + system share live with the caller.
 class ShareCard extends StatelessWidget {
   final WeeklyReview review;
 
-  /// Logical render size (4:5 portrait). Captured at 3x for crispness.
-  static const Size canvasSize = Size(360, 450);
+  /// Logical render size (portrait card). Captured at 3x for crispness.
+  static const Size canvasSize = Size(360, 470);
   static const double capturePixelRatio = 3.0;
 
   const ShareCard({super.key, required this.review});
@@ -72,7 +74,16 @@ class ShareCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
+          // The flower: one petal per weekday, open = productive.
+          SizedBox(
+            width: double.infinity,
+            height: 152,
+            child: CustomPaint(
+              painter: _WeekBloom(daily: r.dailyCounts, total: r.doneCount),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -81,11 +92,25 @@ class ShareCard extends StatelessWidget {
               _num('${r.activeDays}', 'ACTIVE DAYS'),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+          // Second data row — the stories behind the numbers.
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              if (r.bestDay != null && r.bestDayCount > 0)
+                _chip('★ best day ${r.bestDay} ×${r.bestDayCount}'),
+              if (r.habitsTotal > 0)
+                _chip('habits ${r.habitsKept}/${r.habitsTotal}'),
+              if (r.topTag != null && r.topTag!.isNotEmpty)
+                _chip(r.topTag!),
+            ],
+          ),
+          const SizedBox(height: 10),
           Expanded(
             child: Text(
               r.verdict,
-              maxLines: 5,
+              maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
@@ -118,7 +143,7 @@ class ShareCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     r.streakCurrent > 0
-                        ? '${r.streakCurrent}-day streak'
+                        ? '${r.streakCurrent}-day streak · Daily Bloom'
                         : 'Daily Bloom',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -166,4 +191,106 @@ class ShareCard extends StatelessWidget {
       ],
     );
   }
+
+  Widget _chip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: SakuraColors.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: SakuraColors.cardBorder),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: SakuraColors.inkSoft,
+        ),
+      ),
+    );
+  }
+}
+
+/// Seven-petal week bloom: petal i = weekday i (Mon→Sun). Quiet days
+/// stay as small ghost petals; productive days open wide and saturated.
+/// Painter-only (no widget tree) — the whole flower costs one canvas.
+class _WeekBloom extends CustomPainter {
+  final List<int> daily;
+  final int total;
+
+  _WeekBloom({required this.daily, required this.total});
+
+  static const _letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2 - 4);
+    const ring = 40.0;
+    final maxV = daily.isEmpty ? 0 : daily.reduce(math.max);
+    for (var i = 0; i < 7; i++) {
+      final n = i < daily.length ? daily[i] : 0;
+      final t = maxV > 0 ? n / maxV : 0.0;
+      final angle = -math.pi / 2 + i * 2 * math.pi / 7;
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(angle + math.pi / 2);
+      final petal = Paint()
+        ..color = SakuraColors.primary
+            .withValues(alpha: n == 0 ? 0.12 : 0.40 + 0.50 * t);
+      final grow = n == 0 ? 0.72 : 0.78 + 0.34 * t;
+      canvas.drawOval(
+        Rect.fromCenter(
+            center: const Offset(0, -ring),
+            width: 27 * grow,
+            height: 40 * grow),
+        petal,
+      );
+      canvas.restore();
+      // Day letter just outside the petal tip.
+      final lp =
+          center + Offset(math.cos(angle), math.sin(angle)) * (ring + 27);
+      _word(
+          canvas,
+          _letters[i],
+          lp,
+          n > 0
+              ? SakuraColors.inkFaint
+              : SakuraColors.inkFaint.withValues(alpha: 0.45),
+          10);
+    }
+    // Centre disc: the week's total, like the flower's heart.
+    canvas.drawCircle(center, 21, Paint()..color = SakuraColors.surface);
+    canvas.drawCircle(
+        center,
+        21,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = SakuraColors.cardBorder);
+    _word(canvas, '$total', center, SakuraColors.primary, 17,
+        weight: FontWeight.w800);
+  }
+
+  void _word(Canvas canvas, String text, Offset at, Color color,
+      double fontSize,
+      {FontWeight weight = FontWeight.w700}) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+            fontSize: fontSize, color: color, fontWeight: weight),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(_WeekBloom old) =>
+      old.total != total ||
+      old.daily.length != daily.length ||
+      !List.generate(daily.length, (i) => old.daily[i] == daily[i])
+          .every((same) => same);
 }
