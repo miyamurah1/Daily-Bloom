@@ -15,6 +15,7 @@ import '../data/haptics.dart';
 import '../data/habit_store.dart';
 import '../data/mock_data.dart';
 import '../data/reminders.dart';
+import '../data/simple_mode.dart';
 import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../game/game.dart';
@@ -43,6 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _backupBusy = false;
   bool _reminderOn = false;
   bool _reminderBusy = false;
+  int _reminderHour = 9;
+  bool _weeklyOn = false;
+  bool _simpleOn = false;
   bool _crashOn = true;
   bool _tapSoundOn = true;
 
@@ -60,9 +64,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     ReminderService.instance.load().then((_) {
       if (mounted) {
-        setState(
-            () => _reminderOn = ReminderService.instance.enabled);
+        setState(() {
+          _reminderOn = ReminderService.instance.enabled;
+          _reminderHour = ReminderService.instance.hour;
+          _weeklyOn = ReminderService.instance.weeklyEnabled;
+        });
       }
+    });
+    SimpleMode.instance.load().then((_) {
+      if (mounted) setState(() => _simpleOn = SimpleMode.instance.enabled);
     });
     CrashReports.enabled().then((v) {
       if (mounted) setState(() => _crashOn = v);
@@ -156,6 +166,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _reminderBusy = false);
     }
+  }
+
+  /// Tap the nudge time → OS time picker → re-arm tonight, not tomorrow.
+  Future<void> _pickReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _reminderHour, minute: 0),
+    );
+    if (picked == null || !mounted) return;
+    AppHaptics.tap();
+    await ReminderService.instance.setTime(picked.hour);
+    if (!mounted) return;
+    setState(() => _reminderHour = ReminderService.instance.hour);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_reminderOn
+            ? 'Daily nudge moved to $_reminderHour:00.'
+            : 'Saved — the nudge fires at $_reminderHour:00 when turned on.')));
+  }
+
+  /// Sunday review — its own promise (a look-back), its own switch.
+  Future<void> _toggleWeekly(bool value) async {
+    AppHaptics.tap();
+    final ok = await ReminderService.instance.setWeekly(value);
+    if (!mounted) return;
+    setState(() => _weeklyOn = ok && ReminderService.instance.weeklyEnabled);
+    if (value && !ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Notifications blocked — allow them in system settings, then retry.')));
+    }
+  }
+
+  /// Simple mode: hide the power tools (Board, Rules) for a calmer app.
+  Future<void> _toggleSimpleMode(bool value) async {
+    AppHaptics.tap();
+    await SimpleMode.instance.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _simpleOn = SimpleMode.instance.enabled);
   }
 
   /// Fixed danger crimson — never the theme primary, so Delete reads
@@ -858,12 +906,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'One gentle nudge at 9:00 — never more.',
+                        'One gentle nudge at $_reminderHour:00 — never more.',
                         style: TextStyle(
                             fontSize: 12, color: SakuraColors.inkSoft),
                       ),
                     ],
                   ),
+                ),
+                TextButton(
+                  onPressed: _reminderBusy ? null : _pickReminderTime,
+                  child: const Text('Change',
+                      style: TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
                 Switch(
                   value: _reminderOn,
@@ -1034,6 +1088,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       activeThumbColor: SakuraColors.primary,
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Sunday review — a different promise from the daily nudge.
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: SakuraColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.calendarDays,
+                      size: 15, color: SakuraColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Sunday review',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'A calm look-back at your week, Sunday evening.',
+                        style: TextStyle(
+                            fontSize: 12, color: SakuraColors.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _weeklyOn,
+                  onChanged: _toggleWeekly,
+                  activeThumbColor: SakuraColors.primary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Simple mode — progressive disclosure for a calmer app.
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: SakuraColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.moon,
+                      size: 15, color: SakuraColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Simple mode',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Hide power tools (Board, Rules) for a calmer home.',
+                        style: TextStyle(
+                            fontSize: 12, color: SakuraColors.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _simpleOn,
+                  onChanged: _toggleSimpleMode,
+                  activeThumbColor: SakuraColors.primary,
                 ),
               ],
             ),

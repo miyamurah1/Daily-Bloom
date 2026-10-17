@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/habit_store.dart';
+import '../data/profile_name.dart';
+import '../data/reminders.dart';
+import '../data/simple_mode.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 
@@ -26,23 +30,46 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _page = 0;
 
+  // Step 4 personalization — all optional; Skip never seeds anything.
+  String _name = '';
+  int _focusIndex = 0;
+  bool _wantReminder = false;
+  bool _simpleMode = true;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _finish() async {
+  Future<void> _finish({bool personalize = true}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(OnboardingScreen.seenKey, true);
     } catch (_) {}
+    if (personalize) {
+      // Name powers the home greeting; the chosen focus plants one tiny
+      // starter ritual (idempotent — the store dedupes by name).
+      await ProfileName.write(_name);
+      if (_focusIndex < RitualPresets.presets.length) {
+        try {
+          await HabitStore.instance.load();
+          await HabitStore.instance
+              .applyPreset(RitualPresets.presets[_focusIndex]);
+        } catch (_) {}
+      }
+      await SimpleMode.instance.setEnabled(_simpleMode);
+      if (_wantReminder) {
+        // The willing moment: one permission prompt, right after value.
+        await ReminderService.instance.setEnabled(true);
+      }
+    }
     widget.onDone();
   }
 
   void _next() {
-    if (_page >= 2) {
-      _finish();
+    if (_page >= 3) {
+      _finish(personalize: true);
       return;
     }
     _controller.nextPage(
@@ -53,7 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final last = _page >= 2;
+    final last = _page >= 3;
     return Scaffold(
       backgroundColor: SakuraColors.background,
       body: SafeArea(
@@ -62,7 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Align(
               alignment: Alignment.topRight,
               child: TextButton(
-                onPressed: _finish,
+                onPressed: () => _finish(personalize: false),
                 child: Text(
                   'Skip',
                   style: TextStyle(color: SakuraColors.inkSoft),
@@ -73,34 +100,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: PageView(
                 controller: _controller,
                 onPageChanged: (i) => setState(() => _page = i),
-                children: const [
-                  _Slide(
+                children: [
+                  const _Slide(
                     icon: LucideIcons.flower,
                     title: 'Welcome to Daily Bloom',
                     subtitle: 'Your mindful task garden.',
                   ),
-                  _Slide(
+                  const _Slide(
                     icon: LucideIcons.flame,
                     title: 'Complete tasks → grow your heatmap',
                     subtitle:
                         'Every finished bloom paints a square and earns XP.',
                     showHeatmap: true,
                   ),
-                  _Slide(
+                  const _Slide(
                     icon: LucideIcons.sparkles,
                     title: 'Set intentions → build streaks → collect blooms',
                     subtitle: 'Small steps, tended daily, become a garden.',
+                  ),
+                  _PersonalizeStep(
+                    name: _name,
+                    focusIndex: _focusIndex,
+                    reminderOn: _wantReminder,
+                    simpleOn: _simpleMode,
+                    onName: (v) => _name = v,
+                    onFocus: (i) => setState(() => _focusIndex = i),
+                    onReminder: (v) => setState(() => _wantReminder = v),
+                    onSimple: (v) => setState(() => _simpleMode = v),
                   ),
                 ],
               ),
             ),
             // Dots: Wrap, not Row — at 1.3x text scale with a narrow
-            // viewport the 3 pills + margins exceed the line width and a
+            // viewport the 4 pills + margins exceed the line width and a
             // Row throws a 60px RenderFlex overflow (web log).
             Wrap(
               alignment: WrapAlignment.center,
               runSpacing: 8,
-              children: List.generate(3, (i) {
+              children: List.generate(4, (i) {
                 final active = i == _page;
                 return AnimatedContainer(
                   duration: AppMotion.nav,
@@ -240,6 +277,185 @@ class _Slide extends StatelessWidget {
               color: SakuraColors.inkSoft,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Step 4 — make it yours. All optional: name powers the greeting, the
+/// focus chip plants one matching starter ritual, and the two switches
+/// are the willing-moment asks (permission + calm). Scrollable so the
+/// keyboard never buries the CTA.
+class _PersonalizeStep extends StatelessWidget {
+  /// Chip labels — the first three mirror [RitualPresets.presets] order;
+  /// the last one plants nothing.
+  static const labels = [
+    'Calm mornings',
+    'Deep work',
+    'Strong body',
+    'No rituals',
+  ];
+
+  final String name;
+  final int focusIndex;
+  final bool reminderOn;
+  final bool simpleOn;
+  final ValueChanged<String> onName;
+  final ValueChanged<int> onFocus;
+  final ValueChanged<bool> onReminder;
+  final ValueChanged<bool> onSimple;
+
+  const _PersonalizeStep({
+    required this.name,
+    required this.focusIndex,
+    required this.reminderOn,
+    required this.simpleOn,
+    required this.onName,
+    required this.onFocus,
+    required this.onReminder,
+    required this.onSimple,
+  });
+
+  Widget _chip(BuildContext context, int i) {
+    final active = i == focusIndex;
+    return GestureDetector(
+      onTap: () => onFocus(i),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: AppMotion.nav,
+        curve: AppMotion.tapCurve,
+        margin: const EdgeInsets.only(right: 8, bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: active
+              ? SakuraColors.primary.withValues(alpha: 0.14)
+              : SakuraColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color:
+                  active ? SakuraColors.primary : SakuraColors.cardBorder),
+        ),
+        child: Text(
+          labels[i],
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+            color: active ? SakuraColors.primary : SakuraColors.inkSoft,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _switchRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: SakuraColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 1),
+                Text(subtitle,
+                    style: TextStyle(
+                        fontSize: 11.5, color: SakuraColors.inkSoft)),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: SakuraColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 8),
+          Text(
+            'Make it yours',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              height: 1.25,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: SakuraColors.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'All optional — you can change these later in Settings.',
+            textAlign: TextAlign.center,
+            style:
+                TextStyle(fontSize: 13, height: 1.4, color: SakuraColors.inkSoft),
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            onChanged: onName,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'What should we call you?',
+              hintText: 'Your name',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'What are you tending?',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: SakuraColors.ink),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'We\'ll plant a tiny starter ritual to match.',
+            style: TextStyle(fontSize: 11.5, color: SakuraColors.inkSoft),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            children: [for (var i = 0; i < labels.length; i++) _chip(context, i)],
+          ),
+          const SizedBox(height: 10),
+          _switchRow(
+            icon: LucideIcons.bell,
+            title: 'Daily nudge',
+            subtitle: 'A gentle reminder at 9:00 — you pick the hour later.',
+            value: reminderOn,
+            onChanged: onReminder,
+          ),
+          _switchRow(
+            icon: LucideIcons.moon,
+            title: 'Simple mode',
+            subtitle: 'A calmer home — power tools stay hidden until wanted.',
+            value: simpleOn,
+            onChanged: onSimple,
+          ),
+          const SizedBox(height: 12),
         ],
       ),
     );

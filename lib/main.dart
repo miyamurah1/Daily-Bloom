@@ -10,6 +10,7 @@ import 'data/auth_store.dart';
 import 'data/crash_reports.dart';
 import 'data/energy_store.dart';
 import 'data/reminders.dart';
+import 'data/simple_mode.dart';
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
 import 'theme/sakura_theme.dart';
@@ -43,10 +44,17 @@ void main() async {
   // Gentle tap sounds: on by default (confirmations, not ambience).
   await TapSound.load();
 
+  // Simple mode (calm home) — restores before any door renders.
+  await SimpleMode.instance.load();
+
   // Reminder preference restores silently; scheduling re-arms inside
   // init when enabled (the OS drops alarms on reboot/update).
   await ReminderService.instance.load();
   await ReminderService.instance.init();
+  // Keep tomorrow's nudge copy truthful: the daily body tracks the live
+  // streak, so re-arm the (cheap, inexact) alarm on every change.
+  GamificationStateNotifier.onStreakChanged =
+      () => ReminderService.instance.scheduleDaily();
 
   // Warm the Inter files first paint uses (400/600/700/800) so cold
   // start never swaps fonts mid-layout. Best-effort with a short cap:

@@ -84,6 +84,10 @@ class GamificationStateNotifier extends ChangeNotifier {
   int get tokens => _tokens;
   int get streak => _streak;
 
+  /// Wired in main(): lets the daily-reminder copy follow the live streak
+  /// without the game layer importing notifications (no import cycles).
+  static void Function()? onStreakChanged;
+
   int get level => BloomEngine.levelForTotalXp(_totalXp);
   double get levelProgress => BloomEngine.progressInLevel(_totalXp);
   int get xpIntoLevel => _totalXp - BloomEngine.totalXpForLevel(level);
@@ -245,6 +249,7 @@ class GamificationStateNotifier extends ChangeNotifier {
     _lastDayIso = day;
     _persist();
     notifyListeners();
+    onStreakChanged?.call();
     if (!grown || quiet) return;
     if (_streak == 7 || _streak == 30 || _streak == 100) {
       AppHaptics.celebrate();
@@ -257,6 +262,7 @@ class GamificationStateNotifier extends ChangeNotifier {
     _streak = value < 0 ? 0 : value;
     _persist();
     notifyListeners();
+    onStreakChanged?.call();
   }
 
   void addTokens(int amount) {

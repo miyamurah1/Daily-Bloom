@@ -67,7 +67,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    // Step 4 — make it yours: name, focus chips, two switches.
+    expect(find.text('Make it yours'), findsOneWidget);
     expect(find.text('Enter my garden'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Maya');
+    // Choose "No rituals" so finish() skips the preset (prefs-only path
+    // — the widget test's fake-async zone can't complete real I/O).
+    await tester.ensureVisible(find.text('No rituals'));
+    await tester.tap(find.text('No rituals'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Enter my garden'));
     await tester.pumpAndSettle();
     expect(done, 1);

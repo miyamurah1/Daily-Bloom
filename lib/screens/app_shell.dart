@@ -23,6 +23,7 @@ import '../widgets/tab_skeleton.dart';
 import 'folders_screen.dart';
 import 'home_screen.dart';
 import 'insights_hub_screen.dart';
+import 'review_screen.dart';
 import 'rituals_hub_screen.dart';
 import 'task_detail_screen.dart';
 
@@ -130,8 +131,15 @@ class _AppShellState extends State<AppShell>
     }
   }
 
-  /// Open the task behind a due-date notification tap, if any is stashed.
+  /// Open the task behind a due-date notification tap (or the weekly
+  /// review behind its own), if any is stashed.
   Future<void> _drainNotifTask() async {
+    final section = await ReminderService.drainNotifSection();
+    if (section == 'review' && mounted) {
+      Navigator.of(context).push(
+        SakuraPageRoute(builder: (_) => const ReviewScreen()),
+      );
+    }
     final id = await ReminderService.drainNotifTask();
     if (id == null || !mounted) return;
     Task? found;

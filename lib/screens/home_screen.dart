@@ -14,8 +14,10 @@ import '../data/calendar_export.dart';
 import '../data/energy_store.dart';
 import '../data/habit_store.dart';
 import '../data/plan_widget.dart';
+import '../data/profile_name.dart';
 import '../data/reminders.dart';
 import '../data/haptics.dart';
+import '../data/simple_mode.dart';
 import '../data/tap_sound.dart';
 import '../data/mock_data.dart';
 import '../data/task_repository.dart';
@@ -91,6 +93,9 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _note;
   int _bestStreak = 0;
 
+  /// Personalized greeting name (onboarding / account), empty = brand.
+  String _userName = '';
+
   /// First-run helpers: the dismissible concept map (persisted) and the
   /// guided sample-task button (live + empty account only).
   static const _kConceptSeen = 'bloom_concept_seen_v1';
@@ -147,6 +152,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadConcept();
     _loadLastPlan();
     FirstWeekArc.instance.load();
+    // Greeting: onboarding name, else the account's display name.
+    ProfileName.read().then((v) {
+      if (!mounted) return;
+      final display =
+          v.isNotEmpty ? v : (AuthStore.instance.user?.displayName ?? '');
+      setState(() => _userName = display);
+    });
+    // Simple mode hides/shows the Board door — repaint on the flip.
+    SimpleMode.instance.addListener(_onSimpleModeChanged);
     // Offline-first: Home renders the repository's cached tasks and
     // repaints whenever it changes, so a failed sync never blanks the
     // screen. The repo owns optimistic edits + local persistence.
@@ -341,8 +355,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     TaskRepository.instance.removeListener(_onRepoChanged);
+    SimpleMode.instance.removeListener(_onSimpleModeChanged);
     _mobileScroll.dispose();
     super.dispose();
+  }
+
+  void _onSimpleModeChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _refresh() async {
@@ -731,6 +750,81 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  /// Evening streak guard: after 6pm with a live streak and zero
+  /// completions today, offer one-tap rescue. Data-driven — completing
+  /// anything hides it; offline hides it too (no heatmap truth).
+  bool get _streakAtRisk {
+    if (!_live || DateTime.now().hour < 18) return false;
+    final today = DateTime.now();
+    final doneToday = _heat.any((d) =>
+        d.date.year == today.year &&
+        d.date.month == today.month &&
+        d.date.day == today.day &&
+        d.count > 0);
+    return !doneToday && GamificationStateNotifier.instance.streak > 0;
+  }
+
+  Widget _streakRiskCard() {
+    final streak = GamificationStateNotifier.instance.streak;
+    return Container(
+      key: const ValueKey('home-streak-risk'),
+      padding: const EdgeInsets.all(16),
+      decoration: SakuraTheme.cardDecoration(),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: SakuraColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(LucideIcons.flame,
+                size: 15, color: SakuraColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Day $streak is on the line',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: SakuraColors.ink),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'One small bloom tonight keeps it alive.',
+                  style: TextStyle(
+                      fontSize: 12, color: SakuraColors.inkSoft),
+                ),
+              ],
+            ),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: SakuraColors.primary,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 8),
+              minimumSize: Size.zero,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              AppHaptics.tap();
+              TapSound.tap();
+              showQuickAddTask(context);
+            },
+            child: const Text('Plant',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Planner header action: past 8pm with a plan done, the most useful
   /// thing is the review — otherwise (re)plan the day.
   void _plannerAction() {
@@ -959,6 +1053,7 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor:
                   Theme.of(context).scaffoldBackgroundColor,
               appBar: DailyBloomAppBar(
+                greetingName: _userName.isEmpty ? null : _userName,
                 onStoreTap: () {
                   Navigator.of(context).push(
                     SakuraPageRoute(
@@ -1527,6 +1622,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           // Today's Flow FINAL position is below — see the board block
+          if (_streakAtRisk)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: _streakRiskCard(),
+              ),
+            ),
           // after the review doors. Planner sits here instead.
           SliverToBoxAdapter(
             child: Padding(
@@ -1551,7 +1653,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _QuickLinks.rowItem(i, context),
               ),
-              childCount: 4,
+              childCount: _QuickLinks.rowCount,
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 12)),
@@ -1625,6 +1727,11 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _arcRow(),
             ),
+            if (_streakAtRisk)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: _streakRiskCard(),
+              ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _plannerCard(),
@@ -1762,10 +1869,15 @@ class _SyncBanner extends StatelessWidget {
 class _QuickLinks extends StatelessWidget {
   const _QuickLinks({super.key});
 
+  /// Door count — Simple mode drops the power door (Board).
+  static int get rowCount => SimpleMode.instance.enabled ? 3 : 4;
+
   /// Single row item for the mobile [SliverList].
   static Widget rowItem(int index, BuildContext context) {
     // One style for all four: all caps, single trailing arrow.
-    switch (index) {
+    // Simple mode reindexes: Board is the power tool that goes first.
+    final i = SimpleMode.instance.enabled ? index + 1 : index;
+    switch (i) {
       case 0:
         return _link(context, 'BOARD →', () {
           Navigator.of(context).push(
@@ -1822,10 +1934,7 @@ class _QuickLinks extends StatelessWidget {
       runSpacing: 4,
       alignment: WrapAlignment.spaceBetween,
       children: [
-        rowItem(0, context),
-        rowItem(1, context),
-        rowItem(2, context),
-        rowItem(3, context),
+        for (var i = 0; i < rowCount; i++) rowItem(i, context),
       ],
     );
   }

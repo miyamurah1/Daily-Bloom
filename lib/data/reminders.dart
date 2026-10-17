@@ -6,29 +6,35 @@ import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'dart:convert';
 
+import '../game/gamification_state.dart';
 import 'mock_data.dart';
 
 /// Payload inbox for notification taps: the background handler stashes
-/// the tapped task id here (prefs — isolates can't touch widgets) and
-/// AppShell drains it on launch/resume to deep-link the task.
+/// the tapped task id (or review section) here (prefs — isolates can't
+/// touch widgets) and AppShell drains it on launch/resume to deep-link.
 const _kNotifTask = 'bloom_notif_task';
+const _kNotifSection = 'bloom_notif_section';
 
-Future<void> _stashNotifTask(String? payload) async {
-  if (payload == null || !payload.startsWith('task:')) return;
+Future<void> _stashNotifPayload(String? payload) async {
+  if (payload == null) return;
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kNotifTask, payload.substring(5));
+    if (payload.startsWith('task:')) {
+      await prefs.setString(_kNotifTask, payload.substring(5));
+    } else if (payload.startsWith('review')) {
+      await prefs.setString(_kNotifSection, 'review');
+    }
   } catch (_) {}
 }
 
 @pragma('vm:entry-point')
 void onNotifTap(NotificationResponse response) {
-  _stashNotifTask(response.payload);
+  _stashNotifPayload(response.payload);
 }
 
 @pragma('vm:entry-point')
 void onNotifBackgroundTap(NotificationResponse response) {
-  _stashNotifTask(response.payload);
+  _stashNotifPayload(response.payload);
 }
 
 /// One gentle daily nudge ("Time to tend your bloom · 9:00").
@@ -43,7 +49,9 @@ class ReminderService extends ChangeNotifier {
   static const _kEnabled = 'bloom_reminder_v1';
   static const _id = 1;
   static const _focusId = 2;
-  static const _hour = 9;
+  static const _reviewId = 3;
+  static const _kHour = 'bloom_reminder_hour_v1';
+  static const _kWeekly = 'bloom_reminder_review_v1';
 
   static final ReminderService instance = ReminderService._();
   ReminderService._();
@@ -53,8 +61,16 @@ class ReminderService extends ChangeNotifier {
 
   bool _enabled = false;
   bool _ready = false;
+  int _hour = 9;
+  bool _weeklyOn = false;
 
   bool get enabled => _enabled;
+
+  /// Hour the daily nudge fires (0–23). User-configurable in Settings.
+  int get hour => _hour;
+
+  /// The Sunday-evening look-back runs on its own switch.
+  bool get weeklyEnabled => _weeklyOn;
 
   Future<void> init() async {
     try {
@@ -84,12 +100,17 @@ class ReminderService extends ChangeNotifier {
     if (_enabled) {
       await scheduleDaily();
     }
+    if (_weeklyOn) {
+      await scheduleWeekly();
+    }
   }
 
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _enabled = prefs.getBool(_kEnabled) ?? false;
+      _hour = (prefs.getInt(_kHour) ?? 9).clamp(0, 23);
+      _weeklyOn = prefs.getBool(_kWeekly) ?? false;
       notifyListeners();
     } catch (_) {}
   }
@@ -113,6 +134,51 @@ class ReminderService extends ChangeNotifier {
     return true;
   }
 
+  /// Move the daily nudge. Re-arms the alarm immediately when the
+  /// reminder is on, so the new hour applies tonight — not tomorrow.
+  Future<void> setTime(int hour) async {
+    _hour = hour.clamp(0, 23);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_kHour, _hour);
+    } catch (_) {}
+    notifyListeners();
+    if (_enabled) await scheduleDaily();
+  }
+
+  /// Sunday-evening weekly review nudge. Its own switch: the daily nudge
+  /// is a habit prompt, this one is a look-back — different promises.
+  /// Enabling requests OS permission first, like the daily toggle.
+  Future<bool> setWeekly(bool value) async {
+    if (value) {
+      final granted = await _requestPermission();
+      if (!granted) return false;
+      _weeklyOn = true;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_kWeekly, true);
+      } catch (_) {}
+      notifyListeners();
+      await scheduleWeekly();
+      return true;
+    }
+    _weeklyOn = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kWeekly, false);
+    } catch (_) {}
+    notifyListeners();
+    await cancelWeekly();
+    return true;
+  }
+
+  /// Copy for the daily nudge — streak-aware so "Day 12" lands harder
+  /// than a generic sentence. Static + pure: unit-tested headless.
+  @visibleForTesting
+  static String dailyBody(int streak) => streak > 0
+      ? 'Day $streak — your garden is waiting.'
+      : 'One small task today keeps the streak alive.';
+
   Future<bool> _requestPermission() async {
     try {
       if (kIsWeb) return true;
@@ -134,7 +200,7 @@ class ReminderService extends ChangeNotifier {
   }
 
   Future<void> scheduleDaily() async {
-    if (!_ready) return;
+    if (!_ready || !_enabled) return;
     try {
       final now = tz.TZDateTime.now(tz.local);
       var at = tz.TZDateTime(
@@ -145,7 +211,7 @@ class ReminderService extends ChangeNotifier {
       await _plugin.zonedSchedule(
         id: _id,
         title: 'Time to tend your bloom',
-        body: 'One small task today keeps the streak alive.',
+        body: dailyBody(GamificationStateNotifier.instance.streak),
         scheduledDate: at,
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
@@ -164,6 +230,44 @@ class ReminderService extends ChangeNotifier {
   Future<void> cancelDaily() async {
     try {
       await _plugin.cancel(id: _id);
+    } catch (_) {}
+  }
+
+  /// Sunday-evening look-back: next Sunday at 18:00, repeating weekly.
+  /// The `review:` payload drains on tap into the weekly review screen.
+  Future<void> scheduleWeekly() async {
+    if (!_ready || !_weeklyOn) return;
+    try {
+      final now = tz.TZDateTime.now(tz.local);
+      final daysAhead = (DateTime.sunday - now.weekday) % 7;
+      var at = tz.TZDateTime(tz.local, now.year, now.month, now.day, 18)
+          .add(Duration(days: daysAhead));
+      if (!at.isAfter(now)) {
+        at = at.add(const Duration(days: 7));
+      }
+      await _plugin.zonedSchedule(
+        id: _reviewId,
+        title: 'Your week in bloom',
+        body: 'A calm look-back: what grew, what wilted, what next.',
+        scheduledDate: at,
+        payload: 'review:',
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'daily-bloom-review',
+            'Weekly review',
+            importance: Importance.low,
+            priority: Priority.low,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> cancelWeekly() async {
+    try {
+      await _plugin.cancel(id: _reviewId);
     } catch (_) {}
   }
 
@@ -240,6 +344,19 @@ class ReminderService extends ChangeNotifier {
       final id = prefs.getString(_kNotifTask);
       if (id != null) await prefs.remove(_kNotifTask);
       return (id == null || id.isEmpty) ? null : id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Take a pending notification-tap section ('review') or null.
+  /// Single-shot: the stash clears on read.
+  static Future<String?> drainNotifSection() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final s = prefs.getString(_kNotifSection);
+      if (s != null) await prefs.remove(_kNotifSection);
+      return (s == null || s.isEmpty) ? null : s;
     } catch (_) {
       return null;
     }
@@ -395,6 +512,8 @@ class ReminderService extends ChangeNotifier {
   @visibleForTesting
   void debugFill({bool enabled = false}) {
     _enabled = enabled;
+    _hour = 9;
+    _weeklyOn = false;
     notifyListeners();
   }
 }

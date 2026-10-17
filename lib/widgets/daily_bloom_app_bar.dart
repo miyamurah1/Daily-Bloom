@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/profile_name.dart';
 import '../game/gamification_state.dart';
 import '../screens/search_screen.dart';
 import '../theme/sakura_theme.dart';
@@ -12,10 +13,13 @@ import 'motion.dart';
 /// Custom AppBar — Daily Bloom title + date subtitle + token pill.
 ///
 /// Matches design: 日常 / DAILY BLOOM on the left,
-/// token balance + STORE chips on the right.
+/// token balance + STORE chips on the right. When [greetingName] is set,
+/// the subtitle becomes a time-aware greeting ("GOOD MORNING, MAYA") —
+/// the cheapest warmth in the app.
 class DailyBloomAppBar extends StatelessWidget
     implements PreferredSizeWidget {
   final int tokens;
+  final String? greetingName;
   final VoidCallback? onStoreTap;
   final VoidCallback? onLogoutTap;
   final VoidCallback? onSettingsTap;
@@ -23,6 +27,7 @@ class DailyBloomAppBar extends StatelessWidget
   const DailyBloomAppBar(
       {super.key,
       this.tokens = 450,
+      this.greetingName,
       this.onStoreTap,
       this.onLogoutTap,
       this.onSettingsTap});
@@ -68,7 +73,11 @@ class DailyBloomAppBar extends StatelessWidget
                         children: [
                           Flexible(
                             child: Text(
-                              'DAILY BLOOM',
+                              greetingName == null ||
+                                      greetingName!.trim().isEmpty
+                                  ? 'DAILY BLOOM'
+                                  : ProfileName.greeting(greetingName!)
+                                      .toUpperCase(),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

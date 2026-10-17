@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/inbox_store.dart';
+import '../data/simple_mode.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/tab_skeleton.dart';
@@ -23,8 +24,8 @@ class InsightsHubScreen extends StatefulWidget {
 }
 
 class _InsightsHubScreenState extends State<InsightsHubScreen> {
-  static const _labels = ['Insights', 'Review', 'Inbox', 'Rules'];
-  static const _icons = [
+  static const _allLabels = ['Insights', 'Review', 'Inbox', 'Rules'];
+  static const _allIcons = [
     LucideIcons.barChart3,
     LucideIcons.sparkles,
     LucideIcons.inbox,
@@ -34,6 +35,15 @@ class _InsightsHubScreenState extends State<InsightsHubScreen> {
   int _index = 0;
   final Set<int> _visited = {0};
 
+  /// Simple mode drops the Rules power tool; the hub keeps three doors.
+  List<String> get _labels => SimpleMode.instance.enabled
+      ? _allLabels
+      : _allLabels.sublist(0, _allLabels.length - 1);
+
+  List<IconData> get _icons => SimpleMode.instance.enabled
+      ? _allIcons
+      : _allIcons.sublist(0, _allIcons.length - 1);
+
   /// Unread inbox notifications → a small red dot on the Inbox segment.
   /// Shared state: [InboxStore] is published by the Inbox screen itself,
   /// so the dot clears the moment a message is read.
@@ -42,13 +52,16 @@ class _InsightsHubScreenState extends State<InsightsHubScreen> {
   @override
   void initState() {
     super.initState();
+    SimpleMode.instance.load();
     InboxStore.instance.addListener(_onInboxChanged);
+    SimpleMode.instance.addListener(_onInboxChanged);
     InboxStore.instance.refresh();
   }
 
   @override
   void dispose() {
     InboxStore.instance.removeListener(_onInboxChanged);
+    SimpleMode.instance.removeListener(_onInboxChanged);
     super.dispose();
   }
 
