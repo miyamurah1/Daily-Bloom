@@ -12,29 +12,59 @@ import 'mock_data.dart';
 /// Payload inbox for notification taps: the background handler stashes
 /// the tapped task id (or review section) here (prefs — isolates can't
 /// touch widgets) and AppShell drains it on launch/resume to deep-link.
+///
+/// Action buttons ride the same inbox: a "Done" action stashes
+/// `done:<taskId>` (drained into a repo move-to-done) and a "Plant"
+/// action stashes the `quickadd` section (drained into quick-add).
 const _kNotifTask = 'bloom_notif_task';
 const _kNotifSection = 'bloom_notif_section';
+const _kNotifDone = 'bloom_notif_done';
 
-Future<void> _stashNotifPayload(String? payload) async {
+/// Action ids for the notification buttons below. Plain lowercase —
+/// Android and iOS both round-trip these verbatim in `actionId`.
+const kNotifActionDone = 'bloom_done';
+const kNotifActionPlant = 'bloom_plant';
+
+/// iOS categories. NOTE: iOS freezes category actions at install —
+/// renaming a category after release needs a reinstall or a new id.
+const kNotifCategoryTaskDue = 'task_due';
+const kNotifCategoryDailyNudge = 'daily_nudge';
+
+Future<void> _stashNotifPayload(String? payload, {String? actionId}) async {
   if (payload == null) return;
   try {
     final prefs = await SharedPreferences.getInstance();
+    // "Done ✓" on a due-date alarm completes the task behind it.
+    if (actionId == kNotifActionDone && payload.startsWith('task:')) {
+      final id = payload.substring(5);
+      if (id.isNotEmpty) await prefs.setString(_kNotifDone, id);
+      return;
+    }
+    // "Plant 🌱" on the daily nudge opens capture (same as tapping it).
+    if (actionId == kNotifActionPlant) {
+      await prefs.setString(_kNotifSection, 'quickadd');
+      return;
+    }
     if (payload.startsWith('task:')) {
       await prefs.setString(_kNotifTask, payload.substring(5));
     } else if (payload.startsWith('review')) {
       await prefs.setString(_kNotifSection, 'review');
+    } else if (payload.startsWith('quickadd')) {
+      await prefs.setString(_kNotifSection, 'quickadd');
     }
   } catch (_) {}
 }
 
 @pragma('vm:entry-point')
 void onNotifTap(NotificationResponse response) {
-  _stashNotifPayload(response.payload);
+  _stashNotifPayload(response.payload, actionId: response.actionId);
 }
 
 @pragma('vm:entry-point')
 void onNotifBackgroundTap(NotificationResponse response) {
-  _stashNotifPayload(response.payload);
+  // Background isolate: stashing only — no repo/plugin access here.
+  // The foreground drain completes the task on next launch/resume.
+  _stashNotifPayload(response.payload, actionId: response.actionId);
 }
 
 /// One gentle daily nudge ("Time to tend your bloom · 9:00").
@@ -82,9 +112,33 @@ class ReminderService extends ChangeNotifier {
         // Fallback keeps scheduling working with a fixed offset.
         tz.setLocalLocation(tz.getLocation('Etc/UTC'));
       }
-      const settings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
+      // The action factories are not const, so the iOS half of this
+      // literal is non-const; the Android half stays a const.
+      const androidInit =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      final settings = InitializationSettings(
+        android: androidInit,
+        // iOS action categories: "Done ✓" on due alarms, "Plant 🌱" on
+        // the daily nudge. Registered once here (see the frozen-at-install
+        // note on the category ids above).
+        iOS: DarwinInitializationSettings(
+          notificationCategories: [
+            DarwinNotificationCategory(
+              kNotifCategoryTaskDue,
+              actions: [
+                DarwinNotificationAction.plain(
+                    kNotifActionDone, 'Done ✓'),
+              ],
+            ),
+            DarwinNotificationCategory(
+              kNotifCategoryDailyNudge,
+              actions: [
+                DarwinNotificationAction.plain(
+                    kNotifActionPlant, 'Plant 🌱'),
+              ],
+            ),
+          ],
+        ),
       );
       await _plugin.initialize(
         settings: settings,
@@ -213,12 +267,22 @@ class ReminderService extends ChangeNotifier {
         title: 'Time to tend your bloom',
         body: dailyBody(GamificationStateNotifier.instance.streak),
         scheduledDate: at,
+        // Tap → straight into quick-add: the nudge is actionable.
+        // "Plant 🌱" does the same without opening the app first.
+        payload: 'quickadd:',
         notificationDetails: const NotificationDetails(
           android: AndroidNotificationDetails(
             'daily-bloom',
             'Daily reminder',
             importance: Importance.low,
             priority: Priority.low,
+            actions: [
+              AndroidNotificationAction(
+                  kNotifActionPlant, 'Plant 🌱'),
+            ],
+          ),
+          iOS: DarwinNotificationDetails(
+            categoryIdentifier: kNotifCategoryDailyNudge,
           ),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -362,6 +426,20 @@ class ReminderService extends ChangeNotifier {
     }
   }
 
+  /// Take a pending "Done ✓" action task id (or null). Single-shot.
+  /// The completer moves the task to done via the repository (optimistic
+  /// + outboxed, so it works even if the app was killed offline).
+  static Future<String?> drainNotifDone() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString(_kNotifDone);
+      if (id != null) await prefs.remove(_kNotifDone);
+      return (id == null || id.isEmpty) ? null : id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static const _kTaskAlarms = 'bloom_task_alarms_v1';
 
   /// Max dated tasks armed at once (OS limits + sanity).
@@ -470,11 +548,17 @@ class ReminderService extends ChangeNotifier {
           'Task due dates',
           importance: Importance.high,
           priority: Priority.high,
+          // "Done ✓" completes the task without opening the app;
+          // the plain tap still opens its detail for context.
+          actions: [
+            AndroidNotificationAction(kNotifActionDone, 'Done ✓'),
+          ],
         ),
         iOS: DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          categoryIdentifier: kNotifCategoryTaskDue,
         ),
       ),
       androidScheduleMode: exact

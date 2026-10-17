@@ -22,6 +22,12 @@ struct PlanRow: Identifiable {
 struct PlanEntry: TimelineEntry {
   let date: Date
   let rows: [PlanRow]
+  /// Streak + progress line ("Day 12 · 2 done · 3 open"). Empty = hidden.
+  let stats: String
+}
+
+private func readStats() -> String {
+  UserDefaults(suiteName: widgetGroupId)?.string(forKey: "widget_stats") ?? ""
 }
 
 private func readPlan() -> [PlanRow] {
@@ -42,7 +48,7 @@ private func readPlan() -> [PlanRow] {
 
 struct PlanProvider: TimelineProvider {
   func placeholder(in context: Context) -> PlanEntry {
-    PlanEntry(date: Date(), rows: [
+    PlanEntry(date: Date(), stats: "Day 12 · 2 done · 3 open", rows: [
       PlanRow(id: "", title: "Prepare demo slides", reason: "due soon", done: false),
       PlanRow(id: "", title: "Grocery run", reason: "small win", done: false),
     ])
@@ -50,10 +56,11 @@ struct PlanProvider: TimelineProvider {
 
   func getSnapshot(in context: Context, completion: @escaping (PlanEntry) -> Void) {
     let rows = readPlan()
+    let stats = readStats()
     if rows.isEmpty && context.isPreview {
       completion(placeholder(in: context))
     } else {
-      completion(PlanEntry(date: Date(), rows: rows))
+      completion(PlanEntry(date: Date(), rows: rows, stats: stats))
     }
   }
 
@@ -74,6 +81,12 @@ struct PlanWidgetEntryView: View {
           .font(.system(size: 10, weight: .semibold))
           .tracking(1.6)
           .foregroundColor(Color(red: 0.91, green: 0.29, blue: 0.42))
+      }
+      if !entry.stats.isEmpty {
+        Text(entry.stats)
+          .font(.system(size: 11))
+          .foregroundColor(Color(red: 0.65, green: 0.62, blue: 0.77))
+          .lineLimit(1)
       }
       if entry.rows.isEmpty {
         Text("No plan yet — open Bloom to plan.")

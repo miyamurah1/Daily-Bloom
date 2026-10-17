@@ -17,6 +17,7 @@ import '../data/plan_widget.dart';
 import '../data/profile_name.dart';
 import '../data/reminders.dart';
 import '../data/haptics.dart';
+import '../data/share_inbox.dart';
 import '../data/simple_mode.dart';
 import '../data/tap_sound.dart';
 import '../data/mock_data.dart';
@@ -161,6 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     // Simple mode hides/shows the Board door — repaint on the flip.
     SimpleMode.instance.addListener(_onSimpleModeChanged);
+    // Share-to-app: text shared from other apps opens a prefilled
+    // quick-add (cold start and warm, exactly once each).
+    ShareInbox.instance.init();
+    ShareInbox.instance.addListener(_onSharedText);
     // Offline-first: Home renders the repository's cached tasks and
     // repaints whenever it changes, so a failed sync never blanks the
     // screen. The repo owns optimistic edits + local persistence.
@@ -189,6 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // zero platform calls. Retimed/completed/deleted tasks re-arm here.
     unawaited(
         ReminderService.instance.syncTaskReminders(TaskRepository.instance.tasks));
+    _pushWidgetStats();
   }
 
   /// Yesterday's unfinished plan, carried as tomorrow's draft: the user
@@ -356,12 +362,44 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     TaskRepository.instance.removeListener(_onRepoChanged);
     SimpleMode.instance.removeListener(_onSimpleModeChanged);
+    ShareInbox.instance.removeListener(_onSharedText);
     _mobileScroll.dispose();
     super.dispose();
   }
 
   void _onSimpleModeChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// A share landed → open quick-add with the text already in place.
+  void _onSharedText() {
+    final text = ShareInbox.instance.pending;
+    if (text == null || !mounted) return;
+    ShareInbox.instance.take();
+    showQuickAddTask(context, initialText: text);
+  }
+
+  /// Widget stats line: streak + today's progress on the launcher.
+  /// Pushed only when the string changes (each push = a broadcast).
+  String _lastWidgetStats = '';
+
+  Future<void> _pushWidgetStats() async {
+    final now = DateTime.now();
+    final doneToday = _done.where((t) {
+      final c = t.completedAt;
+      return c != null &&
+          c.year == now.year &&
+          c.month == now.month &&
+          c.day == now.day;
+    }).length;
+    final stats = PlanWidgetBridge.formatStats(
+      streak: GamificationStateNotifier.instance.streak,
+      done: doneToday,
+      open: _todo.length + _prog.length,
+    );
+    if (stats == _lastWidgetStats) return;
+    _lastWidgetStats = stats;
+    await PlanWidgetBridge.pushStats(stats);
   }
 
   Future<void> _refresh() async {
@@ -387,6 +425,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _settleStakes(); // yesterday's stake resolves against fresh statuses
       await _syncIntention();
       _maybeHabitNudge(); // one quiet line when a streak ends tonight
+      _pushWidgetStats(); // launcher widget: streak + today's progress
     } catch (e) {
       if (!mounted) return;
       // Expired session: AuthStore already bounced to login via AuthGate.

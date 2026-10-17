@@ -40,6 +40,14 @@
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.LAUNCH" />
             </intent-filter>
+
+            <!-- Share-to-app: text shared from other apps lands in a
+                 prefilled quick-add (receive_sharing_intent). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
 
         <!-- Today's-plan home-screen widget (RemoteViews, pushed from Dart). -->

@@ -14,13 +14,14 @@ import 'bloom_snackbar.dart';
 
 /// Modal bottom sheet behind the shell FAB: type a title, pick a folder
 /// and tag, and plant immediately into [TaskRepository] (optimistic +
-/// locally persisted, so it works offline too).
-Future<void> showQuickAddTask(BuildContext context) {
+/// locally persisted, so it works offline too). [initialText] prefills
+/// the title — the share-sheet entry point.
+Future<void> showQuickAddTask(BuildContext context, {String? initialText}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const QuickAddTaskSheet(),
+    builder: (_) => QuickAddTaskSheet(initialText: initialText),
   );
 }
 
@@ -40,14 +41,18 @@ const _fallbackTags = [
 ];
 
 class QuickAddTaskSheet extends StatefulWidget {
-  const QuickAddTaskSheet({super.key});
+  /// Prefilled title (share-to-app entry); null = empty field.
+  final String? initialText;
+
+  const QuickAddTaskSheet({super.key, this.initialText});
 
   @override
   State<QuickAddTaskSheet> createState() => _QuickAddTaskSheetState();
 }
 
 class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
-  final _title = TextEditingController();
+  late final TextEditingController _title =
+      TextEditingController(text: widget.initialText ?? '');
   String _folder = _fallbackFolders.first;
   String _tag = _fallbackTags.first;
   bool _saving = false;

@@ -21,4 +21,27 @@ void main() {
     expect(await PlanWidgetBridge.pushPlan(const []), isFalse);
     expect(await PlanWidgetBridge.initialLaunchUri(), isNull);
   });
+
+  group('launcher stats line', () {
+    test('combines streak + progress', () {
+      expect(
+        PlanWidgetBridge.formatStats(streak: 12, done: 2, open: 3),
+        'Day 12 · 2 done · 3 open',
+      );
+    });
+
+    test('omits the streak when there is none', () {
+      expect(
+        PlanWidgetBridge.formatStats(streak: 0, done: 1, open: 2),
+        '1 done · 2 open',
+      );
+    });
+
+    test('is empty (row hidden) when nothing is known', () {
+      expect(
+        PlanWidgetBridge.formatStats(streak: 0, done: 0, open: 0),
+        isEmpty,
+      );
+    });
+  });
 }

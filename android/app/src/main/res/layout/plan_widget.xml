@@ -19,6 +19,19 @@
         android:letterSpacing="0.12"
         android:textColor="#E84A6B" />
 
+    <!-- Streak + progress line ("Day 12 · 2 done · 3 open") — hidden
+         until Dart pushes a non-empty widget_stats string. -->
+    <TextView
+        android:id="@+id/plan_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="2dp"
+        android:textSize="11sp"
+        android:textColor="#A79FC4"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:visibility="gone" />
+
     <LinearLayout
         android:id="@+id/plan_row_0"
         android:layout_width="match_parent"

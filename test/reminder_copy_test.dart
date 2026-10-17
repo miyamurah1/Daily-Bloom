@@ -60,4 +60,26 @@ void main() {
     expect(await ReminderService.drainNotifTask(), 't-42');
     expect(await ReminderService.drainNotifTask(), isNull);
   });
+
+  test('done-action stash drains once and ignores blanks', () async {
+    final prefs = await SharedPreferences.getInstance();
+    expect(await ReminderService.drainNotifDone(), isNull);
+
+    await prefs.setString('bloom_notif_done', 't-7');
+    expect(await ReminderService.drainNotifDone(), 't-7');
+    // Single-shot: consumed on the first read.
+    expect(await ReminderService.drainNotifDone(), isNull);
+
+    await prefs.setString('bloom_notif_done', '');
+    expect(await ReminderService.drainNotifDone(), isNull);
+  });
+
+  group('notification action ids', () {
+    test('are stable wire values (native round-trips them verbatim)',
+        () {
+      expect(kNotifActionDone, 'bloom_done');
+      expect(kNotifActionPlant, 'bloom_plant');
+      expect(kNotifCategoryTaskDue, isNot(kNotifCategoryDailyNudge));
+    });
+  });
 }

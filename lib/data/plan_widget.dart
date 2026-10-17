@@ -69,6 +69,36 @@ class PlanWidgetBridge {
     }
   }
 
+  /// Streak + progress line for under the widget header
+  /// ("Day 12 · 2 done · 3 open"). Empty string hides the row.
+  static String formatStats(
+      {required int streak, required int done, required int open}) {
+    final parts = <String>[
+      if (streak > 0) 'Day $streak',
+      if (done > 0 || open > 0) '$done done · $open open',
+    ];
+    return parts.join(' · ');
+  }
+
+  /// Push the stats line. Same keys/group as [pushPlan]; the native
+  /// widget shows the row only when the string is non-empty.
+  static Future<bool> pushStats(String stats) async {
+    if (!_supported) return false;
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        await HomeWidget.setAppGroupId(kPlanWidgetGroupId);
+      }
+      await HomeWidget.saveWidgetData<String>('widget_stats', stats);
+      await HomeWidget.updateWidget(
+        androidName: kAndroidWidgetName,
+        iOSName: kIOSWidgetName,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Warm tap subscription. Returns null off Android/iOS (web,
   /// desktop, tests) where the `home_widget/updates` channel does not
   /// exist — subscribing unguarded throws MissingPluginException during

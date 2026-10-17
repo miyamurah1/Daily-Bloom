@@ -15,6 +15,7 @@ import '../game/game.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/focus_mini_player.dart';
+import '../widgets/bloom_snackbar.dart';
 import '../widgets/motion.dart';
 import '../widgets/quick_add_ritual_sheet.dart';
 import '../widgets/quick_add_task_sheet.dart';
@@ -132,13 +133,31 @@ class _AppShellState extends State<AppShell>
   }
 
   /// Open the task behind a due-date notification tap (or the weekly
-  /// review behind its own), if any is stashed.
+  /// review behind its own), if any is stashed. A "Done ✓" action press
+  /// completes behind the scenes instead — confirmed with a snackbar,
+  /// no screen to open because the work is already finished.
   Future<void> _drainNotifTask() async {
+    final doneId = await ReminderService.drainNotifDone();
+    if (doneId != null && mounted) {
+      final known =
+          TaskRepository.instance.tasks.any((t) => t.id == doneId);
+      if (known) {
+        await TaskRepository.instance.moveTask(doneId, 'done');
+        if (!mounted) return;
+        showBloomSnackBar(context, 'Done — nice tending. 🌸');
+      }
+      // Unknown id (deleted since the alarm was armed): silently ignore
+      // rather than queue a bogus move the server can never apply.
+    }
     final section = await ReminderService.drainNotifSection();
     if (section == 'review' && mounted) {
       Navigator.of(context).push(
         SakuraPageRoute(builder: (_) => const ReviewScreen()),
       );
+    }
+    if (section == 'quickadd' && mounted) {
+      // The daily nudge is a one-tap capture: land in quick-add.
+      await showQuickAddTask(context);
     }
     final id = await ReminderService.drainNotifTask();
     if (id == null || !mounted) return;

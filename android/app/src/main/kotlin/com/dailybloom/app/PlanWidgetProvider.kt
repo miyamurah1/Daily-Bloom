@@ -36,6 +36,15 @@ class PlanWidgetProvider : HomeWidgetProvider() {
                         launchIntent(context, 100, Uri.parse("dailybloom://plan")),
                     )
 
+                    // Streak + progress line; hidden until Dart pushes one.
+                    val stats = widgetData.getString("widget_stats", "") ?: ""
+                    if (stats.isEmpty()) {
+                        setViewVisibility(R.id.plan_stats, View.GONE)
+                    } else {
+                        setViewVisibility(R.id.plan_stats, View.VISIBLE)
+                        setTextViewText(R.id.plan_stats, stats)
+                    }
+
                     val count = widgetData.getInt("plan_count", 0)
                     val rows = listOf(
                         RowViews(R.id.plan_row_0, R.id.plan_title_0, R.id.plan_reason_0),
