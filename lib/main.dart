@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../game/game.dart';
 import 'data/ambient_sound.dart';
+import 'data/background_music.dart';
 import 'data/tap_sound.dart';
 import 'data/api_client.dart';
 import 'data/auth_store.dart';
@@ -46,6 +47,9 @@ void main() async {
     // Ambient preference is local-only; the wash stays off until a
     // session starts it.
     AmbientSound.load(),
+    // Background music preference: default OFF, restored before the
+    // start below so a returning opt-in resumes on the same frame.
+    BackgroundMusic.load(),
     // Gentle tap sounds: on by default (confirmations, not ambience).
     TapSound.load(),
     // Simple mode (calm home) — restores before any door renders.
@@ -71,6 +75,10 @@ void main() async {
   // by nothing on the first frame — run it alongside first paint
   // instead of delaying it. Best-effort inside; degrades to no-op.
   unawaited(ReminderService.instance.init());
+  // Resume the opt-in background music loop alongside first paint (a
+  // no-op unless the user turned it on in Settings). Not awaited — the
+  // first frame must never wait on an audio platform channel.
+  unawaited(BackgroundMusic.start());
 
   // Crash reporting: Sentry wraps runApp when a DSN was baked in
   // AND the user left the Settings toggle on. Otherwise plain runApp.

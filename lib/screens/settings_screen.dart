@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../data/background_music.dart';
 import '../data/calendar_export.dart';
 import '../data/crash_reports.dart';
 import '../data/haptics.dart';
@@ -50,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _simpleOn = false;
   bool _crashOn = true;
   bool _tapSoundOn = true;
+  bool _bgmOn = false;
   bool _alarmSoundOn = false;
 
   /// Connection probe state: null = not yet tested this visit.
@@ -82,6 +84,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     TapSound.load().then((_) {
       if (mounted) setState(() => _tapSoundOn = TapSound.enabled);
     });
+    BackgroundMusic.load().then((_) {
+      if (mounted) setState(() => _bgmOn = BackgroundMusic.enabled);
+    });
   }
 
   Future<void> _toggleTapSound(bool value) async {
@@ -96,6 +101,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(value
               ? 'Gentle sounds on — taps will whisper.'
               : 'Gentle sounds off — silent touches.')),
+    );
+  }
+
+  Future<void> _toggleBgm(bool value) async {
+    AppHaptics.tap();
+    await BackgroundMusic.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _bgmOn = value);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(value
+              ? 'Background music on — a soft loop follows you around.'
+              : 'Background music off — back to quiet blooms.')),
     );
   }
 
@@ -1181,6 +1200,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Switch(
                   value: _tapSoundOn,
                   onChanged: (v) => _toggleTapSound(v),
+                  activeThumbColor: SakuraColors.primary,
+                ),
+                const SizedBox(height: 4),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: SakuraColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        LucideIcons.music,
+                        size: 15,
+                        color: SakuraColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Background music',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'A soft looping melody across the app. Off until you say so.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: SakuraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Switch(
+                  value: _bgmOn,
+                  onChanged: (v) => _toggleBgm(v),
                   activeThumbColor: SakuraColors.primary,
                 ),
               ],
