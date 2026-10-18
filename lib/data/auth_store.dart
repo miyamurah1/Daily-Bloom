@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_wipe.dart';
+import 'profile_name.dart';
 
 /// Logged-in user profile (mirrors the backend's `publicUser()` shape).
 class AuthUser {
@@ -352,6 +353,33 @@ class AuthStore extends ChangeNotifier {
       // Re-authentication required for sensitive operations.
       throw AuthException(_firebaseMsg(e));
     }
+  }
+
+  /// Rename the profile everywhere it is read from: Firebase identity,
+  /// the cached AuthUser, and the local ProfileName memory (home greeting,
+  /// onboarding, app bar). Best-effort backend push: firebase-sync already
+  /// carries display_name, so next login converges even when offline now.
+  Future<void> updateDisplayName(String name) async {
+    final clean = name.trim().isEmpty ? '' : name.trim();
+    try {
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(clean);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw AuthException(_firebaseMsg(e));
+      }
+    } catch (_) {}
+    if (_user != null) {
+      _user = AuthUser(
+        id: _user!.id,
+        email: _user!.email,
+        displayName: clean,
+        avatarLabel: _user!.avatarLabel,
+        activeTheme: _user!.activeTheme,
+      );
+      await _persistUser();
+    }
+    await ProfileName.write(clean);
+    notifyListeners();
   }
 
   Future<void> logout() async {

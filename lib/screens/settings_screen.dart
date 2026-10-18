@@ -24,6 +24,7 @@ import '../theme/sakura_theme.dart';
 
 
 import '../widgets/bloom_dialog.dart';
+import '../widgets/profile_editor.dart';
 
 String _taskIdentityKey(Task t) =>
     '${t.title.trim().toLowerCase()}|${t.folder.trim().toLowerCase()}|${t.tag.trim().toLowerCase()}|${t.dueAt?.toIso8601String() ?? ''}';
@@ -44,11 +45,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _backupBusy = false;
   bool _reminderOn = false;
   bool _reminderBusy = false;
-  int _reminderHour = 9;
+  int _reminderHour = ReminderService.instance.hour;
   bool _weeklyOn = false;
   bool _simpleOn = false;
   bool _crashOn = true;
   bool _tapSoundOn = true;
+  bool _alarmSoundOn = false;
 
   /// Connection probe state: null = not yet tested this visit.
   bool? _connectionOk;
@@ -94,6 +96,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(value
               ? 'Gentle sounds on — taps will whisper.'
               : 'Gentle sounds off — silent touches.')),
+    );
+  }
+
+  Future<void> _toggleAlarmSound(bool value) async {
+    AppHaptics.tap();
+    await TapSound.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _alarmSoundOn = value);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(value
+              ? 'Alarm chime on — the daily reminder will chime.'
+              : 'Alarm chime off — silent daily reminder.')),
     );
   }
 
@@ -209,6 +225,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Fixed danger crimson — never the theme primary, so Delete reads
   /// as danger even on green (Kyoto) or pink (Midnight) themes.
   static const _danger = Color(0xFFD33A4E);
+
+  /// Profile editor: rename everywhere the name is read from, persist the
+  /// timezone pick, and map the two toggles onto the real reminder
+  /// services. A denied notification permission keeps the toggles off and
+  /// explains instead of failing the whole save.
+  Future<void> _openProfileEditor() async {
+    final user = AuthStore.instance.user;
+    if (user == null) return;
+    AppHaptics.tap();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => ProfileEditor(
+        user: AuthStore.instance.user ?? user,
+        dailyReminderHour: ReminderService.instance.hour,
+        onSave: (result) async {
+          await AuthStore.instance.updateDisplayName(result.displayName);
+          await ReminderService.instance
+              .setTimezoneOverride(result.timezone);
+          final dailyOk = result.notificationsEnabled
+              ? await ReminderService.instance.setEnabled(true)
+              : await ReminderService.instance.setEnabled(false);
+          final reviewOk = result.dailyReminder
+              ? await ReminderService.instance.setWeekly(true)
+              : await ReminderService.instance.setWeekly(false);
+          await ReminderService.instance.setTime(result.dailyReminderHour);
+          if (!dailyOk || !reviewOk) {
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      'Notifications blocked - allow them in system settings, then retry.'),
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _reminderOn = ReminderService.instance.enabled;
+      _reminderHour = ReminderService.instance.hour;
+      _weeklyOn = ReminderService.instance.weeklyEnabled;
+    });
+    if (saved == true && mounted) {
+      AppHaptics.confirm();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile saved.')),
+      );
+    }
+  }
 
   Future<void> _logout() async {
     ThemeStore.instance.resetToDefault();
@@ -696,8 +763,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthStore.instance.user;
-    return Scaffold(
+    return ListenableBuilder(
+      listenable: AuthStore.instance,
+      builder: (context, _) {
+        final user = AuthStore.instance.user;
+        return Scaffold(
       backgroundColor: SakuraColors.background,
       appBar: AppBar(
         backgroundColor: SakuraColors.background,
@@ -759,6 +829,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: SakuraColors.ink),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Tooltip(
+                          message: 'Edit profile',
+                          child: TextButton.icon(
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(88, 40),
+                              tapTargetSize: MaterialTapTargetSize.padded,
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                            ),
+                            onPressed: _openProfileEditor,
+                            icon: Icon(LucideIcons.pencil,
+                                size: 13, color: SakuraColors.primary),
+                            label: Text(
+                              'Edit profile',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: SakuraColors.primary),
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1038,31 +1131,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 14),
+          // ── Audio ──────────────────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: SakuraTheme.cardDecoration(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(LucideIcons.volume2,
-                        size: 13, color: SakuraColors.inkFaint),
-                    const SizedBox(width: 7),
-                    Text(
-                      'SOUNDS',
-                      style: TextStyle(
-                        fontSize: 10,
-                        letterSpacing: 1.6,
-                        fontWeight: FontWeight.w700,
-                        color: SakuraColors.inkFaint,
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: SakuraColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        LucideIcons.volume2,
+                        size: 15,
+                        color: SakuraColors.primary,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1070,35 +1160,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const Text(
                             'Gentle sounds',
                             style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             'Soft blip on Plant and Done. Focus bell and rain are separate.',
                             style: TextStyle(
-                                fontSize: 12,
-                                color: SakuraColors.inkSoft),
+                              fontSize: 12,
+                              color: SakuraColors.inkSoft,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    Switch(
-                      value: _tapSoundOn,
-                      onChanged: (v) => _toggleTapSound(v),
-                      activeThumbColor: SakuraColors.primary,
-                    ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Switch(
+                  value: _tapSoundOn,
+                  onChanged: (v) => _toggleTapSound(v),
+                  activeThumbColor: SakuraColors.primary,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 14),
-          // Sunday review — a different promise from the daily nudge.
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: SakuraTheme.cardDecoration(),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: SakuraColors.primary.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        LucideIcons.bell,
+                        size: 15,
+                        color: SakuraColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Alarm chime',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Daily reminder chime on/off.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: SakuraColors.inkSoft,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Switch(
+                  value: _alarmSoundOn,
+                  onChanged: (v) => _toggleAlarmSound(v),
+                  activeThumbColor: SakuraColors.primary,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Container(
+              decoration: SakuraTheme.cardDecoration(),
+              child: Row(
+                children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -1134,6 +1283,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
           ),
           const SizedBox(height: 14),
           // Simple mode — progressive disclosure for a calmer app.
@@ -1256,6 +1406,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 }

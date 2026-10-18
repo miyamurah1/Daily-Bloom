@@ -82,6 +82,7 @@ class ReminderService extends ChangeNotifier {
   static const _reviewId = 3;
   static const _kHour = 'bloom_reminder_hour_v1';
   static const _kWeekly = 'bloom_reminder_review_v1';
+  static const _kTimezoneOverride = 'bloom_reminder_timezone_v1';
 
   static final ReminderService instance = ReminderService._();
   ReminderService._();
@@ -93,6 +94,7 @@ class ReminderService extends ChangeNotifier {
   bool _ready = false;
   int _hour = 9;
   bool _weeklyOn = false;
+  String? _timezoneOverride;
 
   bool get enabled => _enabled;
 
@@ -101,6 +103,9 @@ class ReminderService extends ChangeNotifier {
 
   /// The Sunday-evening look-back runs on its own switch.
   bool get weeklyEnabled => _weeklyOn;
+
+  /// IANA id the user picked in the profile editor (null = device zone).
+  String? get timezoneOverride => _timezoneOverride;
 
   Future<void> init() async {
     try {
@@ -165,6 +170,7 @@ class ReminderService extends ChangeNotifier {
       _enabled = prefs.getBool(_kEnabled) ?? false;
       _hour = (prefs.getInt(_kHour) ?? 9).clamp(0, 23);
       _weeklyOn = prefs.getBool(_kWeekly) ?? false;
+      _timezoneOverride = prefs.getString(_kTimezoneOverride);
       notifyListeners();
     } catch (_) {}
   }
@@ -447,8 +453,22 @@ class ReminderService extends ChangeNotifier {
 
   /// Stable notification id per task id.
   @visibleForTesting
-  static int taskAlarmId(String taskId) =>
+  static int taskAlarmId(String taskId) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < taskId.length; i++) {
+      h ^= taskId.codeUnitAt(i);
+      h = (h * 0x01000193) & 0xffffffff;
+    }
+    return h & 0x7fffffff;
+  }
+
+  /// Legacy mapping (Dart hashCode). Kept so the first post-upgrade
+  /// `syncTaskReminders` can cancel alarms scheduled under the old ids.
+  /// Do NOT use for new schedules.
+  @visibleForTesting
+  static int legacyTaskAlarmId(String taskId) =>
       taskId.hashCode & 0x7fffffff;
+
 
   /// Reconcile per-task due alarms with the board: schedule future
   /// dated open tasks, cancel finished/deleted/retimed ones. Diff-only,
@@ -489,6 +509,7 @@ class ReminderService extends ChangeNotifier {
       if (want[entry.key] != entry.value) {
         try {
           await _plugin.cancel(id: taskAlarmId(entry.key));
+      await _plugin.cancel(id: legacyTaskAlarmId(entry.key));
         } catch (_) {}
       }
     }
@@ -598,6 +619,26 @@ class ReminderService extends ChangeNotifier {
     _enabled = enabled;
     _hour = 9;
     _weeklyOn = false;
+    _timezoneOverride = null;
     notifyListeners();
+  }
+
+  /// Remember the profile-editor timezone pick. Empty clears back to the
+  /// device zone. Re-arms the alarms immediately so the stored override and
+  /// the scheduled alarms never disagree.
+  Future<void> setTimezoneOverride(String? id) async {
+    final clean = id?.trim();
+    _timezoneOverride = (clean == null || clean.isEmpty) ? null : clean;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_timezoneOverride == null) {
+        await prefs.remove(_kTimezoneOverride);
+      } else {
+        await prefs.setString(_kTimezoneOverride, _timezoneOverride!);
+      }
+    } catch (_) {}
+    notifyListeners();
+    if (_enabled) await scheduleDaily();
+    if (_weeklyOn) await scheduleWeekly();
   }
 }
