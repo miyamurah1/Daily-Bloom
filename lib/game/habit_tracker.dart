@@ -133,7 +133,8 @@ BonsaiTier bonsaiTierForStreak(int streak) {
   return BonsaiTier.lotus;
 }
 
-/// Tiny evolving mark: dot -> sprout -> lotus. Desaturated when wilted, icy when frozen.
+/// Tiny evolving mark: dot -> sprout -> lotus. Icy when frozen.
+/// A zero streak rests at the base tier — quiet, never desaturated.
 class BonsaiGrowthIcon extends StatelessWidget {
   final int streakCount;
   final double size;
@@ -149,22 +150,20 @@ class BonsaiGrowthIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tier = bonsaiTierForStreak(streakCount);
-    final wilted = streakCount <= 0 && !isFrozen;
+    final resting = streakCount <= 0 && !isFrozen;
     final accent = isFrozen
         ? BloomGameColors.icyBlue
-        : wilted
-            ? SakuraColors.inkFaint
-            : tier == BonsaiTier.lotus
-                ? BloomGameColors.bloom
-                : tier.index >= BonsaiTier.sapling.index
-                    ? BloomGameColors.violet
-                    : SakuraColors.inkSoft;
+        : tier == BonsaiTier.lotus
+            ? BloomGameColors.bloom
+            : tier.index >= BonsaiTier.sapling.index
+                ? BloomGameColors.violet
+                : SakuraColors.inkSoft;
 
     return Tooltip(
       message: isFrozen
           ? '$streakCount-day streak · Frozen'
-          : wilted
-              ? 'Wilted — start today'
+          : resting
+              ? 'Resting — start today'
               : '$streakCount-day streak · ${tier.name}',
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: streakCount.clamp(0, 15) / 15),
@@ -175,9 +174,9 @@ class BonsaiGrowthIcon extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: accent.withValues(alpha: isFrozen ? 0.16 : wilted ? 0.08 : 0.12 + 0.06 * t),
+            color: accent.withValues(alpha: isFrozen ? 0.16 : 0.12 + 0.06 * t),
             border: Border.all(
-              color: accent.withValues(alpha: isFrozen ? 0.5 : wilted ? 0.25 : 0.4),
+              color: accent.withValues(alpha: isFrozen ? 0.5 : 0.4),
             ),
           ),
           alignment: Alignment.center,
@@ -396,14 +395,12 @@ class _UnfreezeButton extends StatelessWidget {
 
 class _HabitShell extends StatelessWidget {
   final bool active;
-  final bool wilted;
   final bool isFrozen;
   final Color accent;
   final Widget child;
 
   const _HabitShell({
     required this.active,
-    required this.wilted,
     this.isFrozen = false,
     required this.accent,
     required this.child,
@@ -433,7 +430,7 @@ class _HabitShell extends StatelessWidget {
               SakuraColors.surface,
             ] else ...[
               SakuraColors.surface,
-              SakuraColors.surface.withValues(alpha: wilted ? 0.72 : 1.0),
+              SakuraColors.surface,
             ],
           ],
         ),
@@ -467,13 +464,7 @@ class _HabitShell extends StatelessWidget {
             ),
         ],
       ),
-      child: Opacity(
-        opacity: wilted && !active && !isFrozen ? 0.82 : 1.0,
-        child: AnimatedSaturation(
-          saturated: !wilted || isFrozen,
-          child: child,
-        ),
-      ),
+      child: child,
     );
   }
 }
@@ -551,7 +542,6 @@ class _BinaryHabitCardState extends State<BinaryHabitCard> {
   @override
   Widget build(BuildContext context) {
     final on = widget.isCompleted;
-    final wilted = widget.streakCount <= 0 && !on && !widget.isFrozen;
     final accent = widget.isFrozen
         ? BloomGameColors.icyBlue
         : BloomGameColors.bloom;
@@ -567,7 +557,6 @@ class _BinaryHabitCardState extends State<BinaryHabitCard> {
       ),
       child: _HabitShell(
         active: on,
-        wilted: wilted,
         isFrozen: widget.isFrozen,
         accent: accent,
         child: Material(
@@ -830,7 +819,6 @@ class _MeasurableHabitCardState extends State<MeasurableHabitCard> {
   @override
   Widget build(BuildContext context) {
     final inSuccess = _isInSuccessZone;
-    final wilted = widget.streakCount <= 0 && !inSuccess && !widget.isFrozen;
 
     // Accent: Icy Blue if frozen, Neon Pink (#FF2A55) if in success zone, else Violet.
     final accent = widget.isFrozen
@@ -844,7 +832,6 @@ class _MeasurableHabitCardState extends State<MeasurableHabitCard> {
 
     return _HabitShell(
       active: inSuccess,
-      wilted: wilted,
       isFrozen: widget.isFrozen,
       accent: accent,
       child: Material(

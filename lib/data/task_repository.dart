@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'analytics.dart';
 import 'auth_store.dart';
 import 'mock_data.dart';
 
@@ -436,6 +437,8 @@ class TaskRepository extends ChangeNotifier {
     DateTime? dueAt,
   }) async {
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    // Activation checkpoint: first real task ever (temp rows excluded).
+    final isFirst = !_tasks.any((t) => !t.id.startsWith('temp_'));
     final optimisticTask = Task(
       id: tempId,
       title: title.trim(),
@@ -452,6 +455,7 @@ class TaskRepository extends ChangeNotifier {
     _tasks.insert(0, optimisticTask);
     notifyListeners();
     await _saveToLocalCache();
+    BloomAnalytics.taskCreated(isFirst: isFirst);
 
     try {
       final serverTask = await _api.createTask(
@@ -495,12 +499,16 @@ class TaskRepository extends ChangeNotifier {
   /// not (yet) in the local cache — the API call still fires.
   Future<void> moveTask(String id, String newStatus) async {
     final idx = _tasks.indexWhere((t) => t.id == id);
+    final wasDone = idx != -1 && _tasks[idx].status == 'done';
     if (idx != -1) {
       final old = _tasks[idx];
       if (old.status == newStatus) return;
       _tasks[idx] = old.copyWith(status: newStatus);
       notifyListeners();
       await _saveToLocalCache();
+      if (newStatus == 'done' && !wasDone) {
+        BloomAnalytics.taskCompleted();
+      }
     }
 
     try {

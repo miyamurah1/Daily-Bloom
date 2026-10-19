@@ -125,15 +125,4 @@ abstract class BloomEngine {
     if (comboCount == 2) return baseXp + 10;
     return baseXp;
   }
-
-  /// Daily stake: each planned task risks [stakePerTask] XP overnight.
-  /// ~20% of one completion, so missing stings but never erases a win.
-  static const int stakePerTask = 10;
-
-  /// Hard ceiling on one morning's wilt — three missed stakes max.
-  static const int maxDailyStakeLoss = 30;
-
-  /// Capped wilt for [missedCount] unfinished staked tasks.
-  static int stakeLossFor(int missedCount) =>
-      (missedCount * stakePerTask).clamp(0, maxDailyStakeLoss);
 }

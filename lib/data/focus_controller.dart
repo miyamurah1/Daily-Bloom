@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'api_client.dart';
+import 'analytics.dart';
 import 'ambient_sound.dart';
 import 'auth_store.dart';
 import 'mock_data.dart';
 import 'reminders.dart';
 import 'session_sound.dart';
+import '../game/first_week_arc.dart';
 
 /// mm:ss for the countdown pills.
 String formatCountdown(Duration d) {
@@ -83,6 +85,7 @@ class FocusController extends ChangeNotifier {
     if (active) throw const AuthException('Finish the current session first.');
     busy = true;
     notifyListeners();
+    BloomAnalytics.focusStarted(minutes: minutes);
     try {
       final s = await _api.startFocus(
           taskId: task?.id, minutes: minutes, mode: mode);
@@ -191,6 +194,12 @@ class FocusController extends ChangeNotifier {
     // Chime + haptics the moment a session completes — natural expiry
     // and manual Finish both land here. Abandon stays silent on purpose.
     unawaited(SessionSound.chime());
+    if (wasFocus) {
+      // The garden's core loop: a finished focus session counts as the
+      // first-week arc's "focus" milestone and a product event.
+      BloomAnalytics.focusCompleted(minutes: actual);
+      unawaited(FirstWeekArc.instance.report(FirstWeekStep.focused));
+    }
     try {
       await _api.finishFocus(
           id: id,

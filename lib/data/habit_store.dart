@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+
+import 'analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../game/gamification_state.dart';
@@ -331,6 +333,7 @@ class HabitStore extends ChangeNotifier {
     _habits = [for (final h in _habits) if (h.id == id && !h.counted) (() { final next = {...h.log}; if ((next[day] ?? 0) >= 1) { next.remove(day); result = false; } else { next[day] = 1; result = true; } return h.copyWith(log: trim(next)); })() else h];
     notifyListeners();
     await persist();
+    if (result) BloomAnalytics.habitCheckin();
     return result;
   }
   Future<num> logToday(String id, num delta, [DateTime? now]) async {

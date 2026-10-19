@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../game/game.dart';
 import 'data/ambient_sound.dart';
+import 'data/analytics.dart';
 import 'data/background_music.dart';
 import 'data/tap_sound.dart';
 import 'data/api_client.dart';
@@ -109,6 +110,8 @@ class DailyBloomApp extends StatelessWidget {
         title: 'Daily Bloom',
         debugShowCheckedModeBanner: false,
         theme: SakuraTheme.buildTheme(),
+        // Coarse screen views (forward-only; silent before Firebase init).
+        navigatorObservers: [BloomRouteObserver()],
         // Cap system text scaling at 1.3x: the layout stays legible for
         // accessibility without the sub-12px labels blowing out cards.
         builder: (context, child) {

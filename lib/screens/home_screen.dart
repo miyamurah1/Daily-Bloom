@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ai_client.dart';
+import '../data/analytics.dart';
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/calendar_export.dart';
@@ -109,9 +110,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _plannedOnce = false;
   List<AiPick> _picks = const [];
 
-  /// Explicit stake opt-in: planning alone never risks XP. Tapping
-  /// "Stake" arms tonight's settle; passive days can't wilt.
-  bool _staked = false;
+  /// One "Clean sweep" share nudge per plan: fires once when every pick
+  /// of the current plan is finished. A celebration, never a nag.
+  bool _planCelebrated = false;
 
   /// 12-week evidence grid. Expanded by default so the proof is
   /// visible; collapsible for a shorter scroll. State survives
@@ -190,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _done = TaskRepository.instance.doneTasks;
       _updateCarry();
     });
+    _maybeCelebratePlan();
     // Keep due-date alarms truthful: diff-only, so steady state costs
     // zero platform calls. Retimed/completed/deleted tasks re-arm here.
     unawaited(
@@ -282,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
         rows.map((r) => (id: r.id, title: r.title, reason: r.reason)).toList());
   }
 
-  /// Plan the carried draft first: yesterday's unfinished, same stakes.
+  /// Plan the carried draft first: yesterday's unfinished, picked again.
   void _planCarry() {
     if (_carry.isEmpty || _planning) return;
     final picks = _carry
@@ -293,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _picks = picks;
       _plannedOnce = true;
       _carry = const [];
-      _staked = false;
+      _planCelebrated = false;
     });
     AppHaptics.tap();
     _saveLastPlan(picks.map((p) => p.id).toList());
@@ -422,7 +424,6 @@ class _HomeScreenState extends State<HomeScreen> {
       await TaskRepository.instance.loadRemote(withDetails: true);
       await EnergyStore.instance
           .prune(TaskRepository.instance.tasks.map((t) => t.id));
-      _settleStakes(); // yesterday's stake resolves against fresh statuses
       await _syncIntention();
       _maybeHabitNudge(); // one quiet line when a streak ends tonight
       _pushWidgetStats(); // launcher widget: streak + today's progress
@@ -693,7 +694,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// AI day plan: top-3 open tasks with reasons. Tap a pick to open it.
-  /// Planning stakes each pick (10 XP) — previewed in the card below.
   Future<void> _planDay() async {
     if (_planning) return;
     setState(() => _planning = true);
@@ -703,12 +703,13 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _picks = picks;
         _plannedOnce = true;
-        _staked = false;
+        _planCelebrated = false;
       });
       AppHaptics.tap();
       _saveLastPlan(picks.map((p) => p.id).toList());
       _syncPlanWidget();
       FirstWeekArc.instance.report(FirstWeekStep.planned);
+      BloomAnalytics.planMyDay();
       _syncBannerHint();
       // Peak hour annotates the plan; failure keeps the plan as-is.
       try {
@@ -877,26 +878,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _planDay();
   }
 
-  /// Explicit stake opt-in: arm tonight's settle for the current picks.
-  /// Nothing is risked until the user taps this.
-  void _stake() {
-    if (_planning || _picks.isEmpty) return;
-    GamificationStateNotifier.instance
-        .stakeDay(_picks.map((p) => p.id).toList());
-    setState(() => _staked = true);
-    AppHaptics.tap();
-    FirstWeekArc.instance.report(FirstWeekStep.staked);
-    _syncBannerHint();
-  }
-
   /// First-week arc: refresh the prompt row (state lives in the store).
   void _syncBannerHint() => setState(() {});
 
   Widget _arcRow() {
     final step = FirstWeekArc.instance.nextStep;
     if (step == null) return const SizedBox.shrink();
-    const tags = ['FIRST GARDEN', 'DAILY PLAN', 'COMMIT'];
-    const ctas = ['Plant', 'Plan', 'Stake'];
+    const tags = ['FIRST GARDEN', 'DAILY PLAN', 'DEEP WORK'];
+    const ctas = ['Plant', 'Plan', 'Focus'];
     return GestureDetector(
       onTap: _arcAction,
       behavior: HitTestBehavior.opaque,
@@ -947,7 +936,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Arc CTA: plant opens the FAB sheet, plan plans, stake stakes.
+  /// Arc CTA: plant opens the FAB sheet, plan plans, focus opens the
+  /// focus timer (finishing a session completes the arc).
   void _arcAction() {
     final step = FirstWeekArc.instance.nextStep;
     if (step == null) return;
@@ -956,48 +946,32 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (step == 1) {
       _planDay();
     } else {
-      _stake();
+      Navigator.of(context).push(
+        SakuraPageRoute(builder: (_) => const FocusTimerScreen()),
+      );
     }
   }
 
-  /// Morning settle: if yesterday had a stake, compare it against current
-  /// statuses and wilt the unfinished (capped, never a level). Runs once —
-  /// settle clears the stake. Fresh-data path only; offline keeps it pending.
-  void _settleStakes() {
-    final game = GamificationStateNotifier.instance;
-    final stakedDay = game.stakedDayIso;
-    if (stakedDay == null) return;
-    final today =
-        '${DateTime.now().year.toString().padLeft(4, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
-    if (stakedDay == today) return;
-    final repo = TaskRepository.instance;
-    final existing = repo.tasks.map((t) => t.id).toSet();
-    final done = repo.doneTasks.map((t) => t.id).toSet();
-    final result = game.settleDay(done, existing);
+  /// Full-plan celebration: when every pick of the current plan is done,
+  /// offer the share card once. Replaces v1's stake settle — the same
+  /// peak moment, minus the punishment.
+  void _maybeCelebratePlan() {
+    if (_planCelebrated || !_plannedOnce || _picks.isEmpty) return;
+    final done = TaskRepository.instance.doneTasks.map((t) => t.id).toSet();
+    final allDone = _picks.every((p) => done.contains(p.id));
+    if (!allDone) return;
+    _planCelebrated = true;
     if (!mounted) return;
-    if (result.rested) {
-      showBloomSnackBar(
-          context, 'Tired week — tonight was free. Fresh start tomorrow.');
-    } else if (result.lost > 0) {
-      showBloomSnackBar(context,
-          'Yesterday wilted −${result.lost} XP · ${result.kept} kept — today is fresh.');
-    } else if (result.kept >= 3) {
-      // A stake kept in full is the peak moment to share: one prompt,
-      // the same snackbar, and an action that jumps to the review's
-      // share card. Nudge, never auto-share.
-      showBloomSnackBar(
-        context,
-        'Clean sweep — a week worth sharing.',
-        actionLabel: 'Share',
-        onAction: () {
-          Navigator.of(context).push(
-            SakuraPageRoute(builder: (_) => const ReviewScreen()),
-          );
-        },
-      );
-    } else if (result.kept > 0) {
-      showBloomSnackBar(context, 'Clean sweep — nothing wilted.');
-    }
+    showBloomSnackBar(
+      context,
+      'Clean sweep — a week worth sharing.',
+      actionLabel: 'Share',
+      onAction: () {
+        Navigator.of(context).push(
+          SakuraPageRoute(builder: (_) => const ReviewScreen()),
+        );
+      },
+    );
   }
 
   Future<void> _syncIntention() async {
@@ -1234,75 +1208,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Stake preview + wilt status: the one line that makes the
-          // consequences legible before and after the night.
-          ListenableBuilder(
-            listenable: GamificationStateNotifier.instance,
-            builder: (context, _) {
-              final game = GamificationStateNotifier.instance;
-              final staked = game.stakedIds.length;
-              if (game.wilted && game.lastStakeLoss > 0) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    'Yesterday wilted −${game.lastStakeLoss} XP — today is fresh.',
-                    style: TextStyle(
-                        fontSize: 11.5, color: SakuraColors.primary),
-                  ),
-                );
-              }
-              if (_staked && staked > 0) {
-                if (game.wiltStreak >= 2) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Text(
-                      'Tired week — tonight is on the house, no stakes.',
-                      style: TextStyle(
-                          fontSize: 11.5,
-                          color: SakuraColors.inkSoft),
-                    ),
-                  );
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '$staked at stake · ${BloomEngine.stakePerTask} XP each — finish by midnight.',
-                    style: TextStyle(
-                        fontSize: 11.5, color: SakuraColors.inkSoft),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          // Opt-in row: planning is free; staking is an explicit choice.
-          if (_plannedOnce && !_staked && _picks.isNotEmpty)
-            GestureDetector(
-              onTap: _planning ? null : _stake,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.shieldPlus,
-                        size: 12, color: SakuraColors.primary),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Feeling it? Stake ${BloomEngine.stakePerTask} XP each — finish by midnight.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: SakuraColors.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           if (!_plannedOnce && _carry.isNotEmpty)
             GestureDetector(
               onTap: _planning ? null : _planCarry,
@@ -2013,7 +1918,7 @@ class _GameHud extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  BloomRankBadge(level: game.level, size: 42, showLabel: false, wilted: game.wilted),
+                  BloomRankBadge(level: game.level, size: 42, showLabel: false),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
+import 'analytics.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -235,6 +237,7 @@ class AuthStore extends ChangeNotifier {
       );
       await _rememberEmail(email);
       // authStateChanges() listener above handles _user sync + notifyListeners.
+      BloomAnalytics.login(method: 'email');
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
     } catch (_) {
@@ -279,6 +282,7 @@ class AuthStore extends ChangeNotifier {
         _ready = true;
         await _clearPersisted();
         notifyListeners();
+        BloomAnalytics.signUp(method: 'email');
         return address;
       } finally {
         _ignoreAuthEvents = false;
@@ -314,6 +318,7 @@ class AuthStore extends ChangeNotifier {
       }
       await _rememberEmail(FirebaseAuth.instance.currentUser?.email);
       // authStateChanges() listener handles _user sync + notifyListeners.
+      BloomAnalytics.login(method: 'google');
       return true;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));

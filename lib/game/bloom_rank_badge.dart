@@ -9,6 +9,9 @@ import 'bloom_game_colors.dart';
 ///
 /// Seedling 1 ring → Sprout 2 → Bonsai 3 → Lotus 4 → Sakura 5.
 ///
+/// The badge is always full-color: it never dims or desaturates. A
+/// quiet garden is a resting garden, not a punished one.
+///
 /// ```dart
 /// BloomRankBadge(level: game.level, size: 76)
 /// ```
@@ -20,16 +23,11 @@ class BloomRankBadge extends StatefulWidget {
   /// used by the compact Bento header cell where vertical room is tight.
   final bool showLabel;
 
-  /// Wilted (missed yesterday's stake): desaturated ring + kanji until
-  /// the next completion clears it. No new layout, just quieter color.
-  final bool wilted;
-
   const BloomRankBadge({
     super.key,
     required this.level,
     this.size = 72,
     this.showLabel = true,
-    this.wilted = false,
   });
 
   @override
@@ -73,8 +71,7 @@ class _BloomRankBadgeState extends State<BloomRankBadge>
   Widget build(BuildContext context) {
     final rank = BloomEngine.rankForLevel(widget.level);
     final intricacy = BloomEngine.rankIntricacy(rank);
-    final accent =
-        widget.wilted ? SakuraColors.inkFaint : BloomGameColors.rankAccents[rank.index];
+    final accent = BloomGameColors.rankAccents[rank.index];
     final s = widget.size;
 
     return SizedBox(
@@ -96,8 +93,7 @@ class _BloomRankBadgeState extends State<BloomRankBadge>
                   rotation: _spin.value * 2 * 3.1415926535,
                   arcs: intricacy,
                   accent: accent,
-                  isSakura: rank == BloomRank.sakura && !widget.wilted,
-                  dimmed: widget.wilted,
+                  isSakura: rank == BloomRank.sakura,
                 ),
                 child: Center(
                   child: Container(
@@ -183,14 +179,12 @@ class _RankRingPainter extends CustomPainter {
   final int arcs;
   final Color accent;
   final bool isSakura;
-  final bool dimmed;
 
   _RankRingPainter({
     required this.rotation,
     required this.arcs,
     required this.accent,
     required this.isSakura,
-    this.dimmed = false,
   });
 
   @override
@@ -202,7 +196,7 @@ class _RankRingPainter extends CustomPainter {
       final start = rotation + i * (2 * 3.1415926535 / arcs);
       // Higher ranks sweep longer arcs with smaller gaps.
       final sweep = (2 * 3.1415926535 / arcs) * (0.55 + i * 0.06);
-      final baseAlpha = dimmed ? 0.14 : (i == arcs - 1 ? 0.55 : 0.30);
+      final baseAlpha = i == arcs - 1 ? 0.55 : 0.30;
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
@@ -219,6 +213,5 @@ class _RankRingPainter extends CustomPainter {
       old.rotation != rotation ||
       old.arcs != arcs ||
       old.accent != accent ||
-      old.isSakura != isSakura ||
-      old.dimmed != dimmed;
+      old.isSakura != isSakura;
 }

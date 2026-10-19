@@ -52,6 +52,12 @@ No AI data is sold or used for advertising, by us or anyone else.
   version — never task content) are sent only in releases built with
   reporting configured, and you can switch them off any time in
   Settings → Crash reports.
+- **Usage analytics** (Firebase Analytics): anonymous, aggregate
+  events that help us understand whether the app actually helps —
+  e.g. account created, task planted, task finished, focus session
+  started/completed (duration only), habit checked. **Never** your
+  task titles, notes, email, or any content you write. No advertising
+  or third-party sharing.
 
 ## How it is used
 

@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// 1. Plant three tasks.
 /// 2. Run your first Plan my day.
-/// 3. Commit — stake one day's XP.
+/// 3. Finish one focus session.
 ///
 /// Local-first, offline, never repeats once finished. Each screen calls
 /// [FirstWeekArc.report] on the matching milestone; the card checks
@@ -15,26 +15,30 @@ class FirstWeekArc {
   static const _kDay = 'first_arc_day';
   static const _kPlanted = 'first_arc_planted';
   static const _kPlanned = 'first_arc_planned';
-  static const _kStaked = 'first_arc_staked';
+  static const _kFocused = 'first_arc_focused';
+
+  /// v1.0's stake step — migrated to "focused" on load so anyone who
+  /// already committed carries their arc forward.
+  static const _kLegacyStaked = 'first_arc_staked';
 
   static final FirstWeekArc instance = FirstWeekArc._();
   FirstWeekArc._();
 
   bool _planted = false;
   bool _planned = false;
-  bool _staked = false;
+  bool _focused = false;
   bool _loaded = false;
 
   bool get planted => _planted;
   bool get planned => _planned;
-  bool get staked => _staked;
+  bool get focused => _focused;
 
   /// Which arc step to show next, or null when the arc is complete.
-  /// 0 = plant (need 3+ tasks), 1 = plan, 2 = stake.
+  /// 0 = plant (need 3+ tasks), 1 = plan, 2 = focus.
   int? get nextStep {
     if (!_planted) return 0;
     if (!_planned) return 1;
-    if (!_staked) return 2;
+    if (!_focused) return 2;
     return null;
   }
 
@@ -48,7 +52,7 @@ class FirstWeekArc {
       case 1:
         return 'Tap Plan my day — let Bloom pick top 3.';
       case 2:
-        return 'Feeling it? Stake your plan for XP.';
+        return 'Do one focus session — bloom while you breathe.';
       default:
         return '';
     }
@@ -60,7 +64,14 @@ class FirstWeekArc {
       final prefs = await SharedPreferences.getInstance();
       _planted = prefs.getBool(_kPlanted) ?? false;
       _planned = prefs.getBool(_kPlanned) ?? false;
-      _staked = prefs.getBool(_kStaked) ?? false;
+      _focused = (prefs.getBool(_kFocused) ?? false) ||
+          (prefs.getBool(_kLegacyStaked) ?? false);
+      // Retire the legacy key once the migration has been read.
+      if (prefs.containsKey(_kLegacyStaked)) {
+        try {
+          await prefs.remove(_kLegacyStaked);
+        } catch (_) {}
+      }
       _loaded = true;
     } catch (_) {
       _loaded = true;
@@ -75,14 +86,14 @@ class FirstWeekArc {
         _planted = true;
       case FirstWeekStep.planned:
         _planned = true;
-      case FirstWeekStep.staked:
-        _staked = true;
+      case FirstWeekStep.focused:
+        _focused = true;
     }
     try {
       final prefs = await SharedPreferences.getInstance();
       if (_planted) await prefs.setBool(_kPlanted, true);
       if (_planned) await prefs.setBool(_kPlanned, true);
-      if (_staked) await prefs.setBool(_kStaked, true);
+      if (_focused) await prefs.setBool(_kFocused, true);
     } catch (_) {}
   }
 
@@ -104,13 +115,14 @@ class FirstWeekArc {
   Future<void> resetForNewAccount() async {
     _planted = false;
     _planned = false;
-    _staked = false;
+    _focused = false;
     _loaded = false;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kPlanted);
       await prefs.remove(_kPlanned);
-      await prefs.remove(_kStaked);
+      await prefs.remove(_kFocused);
+      await prefs.remove(_kLegacyStaked);
     } catch (_) {}
   }
 
@@ -119,9 +131,9 @@ class FirstWeekArc {
   void debugReset() {
     _planted = false;
     _planned = false;
-    _staked = false;
+    _focused = false;
     _loaded = false;
   }
 }
 
-enum FirstWeekStep { planted, planned, staked }
+enum FirstWeekStep { planted, planned, focused }
