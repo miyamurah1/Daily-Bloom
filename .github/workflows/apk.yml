@@ -4,15 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'Backend URL baked into the APK (BLOOM_API)'
-        required: false
-        default: 'http://localhost:8080'
+        # No default on purpose: a silent localhost URL baked into a
+        # release APK is a dead build. You must pass a real backend URL
+        # (or an explicit http://localhost... for same-machine testing).
+        description: 'Backend URL baked into the APK (BLOOM_API) — e.g. https://api.yourdomain.com'
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Guard against an empty backend URL
+        env:
+          API_URL: ${{ inputs.api_url }}
+        run: |
+          if [ -z "$(printf '%s' "$API_URL" | tr -d ' \t\r\n')" ]; then
+            echo "::error title=Missing backend URL::api_url is required. Pass the deployed backend (https://...) or an explicit http://localhost for same-machine testing — an empty BLOOM_API ships a build that cannot reach its server."
+            exit 1
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
