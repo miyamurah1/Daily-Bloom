@@ -47,6 +47,23 @@ class _DynamicBloomBackgroundState extends State<DynamicBloomBackground>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The user can flip "remove animations" at any time, so re-evaluate on
+    // every dependency change: pause the loop outright under reduced-motion
+    // (stopping the ticker, not just hiding the layer) so nothing repaints
+    // in the background; resume otherwise. Guarded so a stopped controller
+    // is never re-repeated twice.
+    final mq = MediaQuery.maybeOf(context);
+    final reduce = mq != null && mq.disableAnimations;
+    if (reduce && _drift.isAnimating) {
+      _drift.stop();
+    } else if (!reduce && !_drift.isAnimating) {
+      _drift.repeat();
+    }
+  }
+
+  @override
   void dispose() {
     _drift.dispose();
     super.dispose();
@@ -54,6 +71,11 @@ class _DynamicBloomBackgroundState extends State<DynamicBloomBackground>
 
   @override
   Widget build(BuildContext context) {
+    // Reduced-motion: skip the drift layer entirely (PetalRain does the
+    // same) so the OS "remove animations" setting is honored here too —
+    // a fresh garden still renders, just still.
+    final mq = MediaQuery.maybeOf(context);
+    if (mq != null && mq.disableAnimations) return widget.child;
     // Day-0 magic: a fresh garden (streak 0) gets the same whisper-quiet
     // drift as a streak — at half strength — so the first session already
     // feels alive. Earned streaks (>= 3) bloom fuller. No wilt dimming:
