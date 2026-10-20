@@ -54,7 +54,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _crashOn = true;
   bool _tapSoundOn = true;
   bool _bgmOn = false;
-  bool _alarmSoundOn = false;
 
   /// Connection probe state: null = not yet tested this visit.
   bool? _connectionOk;
@@ -117,20 +116,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(value
               ? 'Background music on — a soft loop follows you around.'
               : 'Background music off — back to quiet blooms.')),
-    );
-  }
-
-  Future<void> _toggleAlarmSound(bool value) async {
-    AppHaptics.tap();
-    await TapSound.setEnabled(value);
-    if (!mounted) return;
-    setState(() => _alarmSoundOn = value);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(value
-              ? 'Alarm chime on — the daily reminder will chime.'
-              : 'Alarm chime off — silent daily reminder.')),
     );
   }
 
@@ -1250,61 +1235,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Switch(
                   value: _bgmOn,
                   onChanged: (v) => _toggleBgm(v),
-                  activeThumbColor: SakuraColors.primary,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: SakuraTheme.cardDecoration(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: SakuraColors.primary.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        LucideIcons.bell,
-                        size: 15,
-                        color: SakuraColors.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Alarm chime',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Daily reminder chime on/off.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: SakuraColors.inkSoft,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Switch(
-                  value: _alarmSoundOn,
-                  onChanged: (v) => _toggleAlarmSound(v),
                   activeThumbColor: SakuraColors.primary,
                 ),
               ],
