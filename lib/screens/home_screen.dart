@@ -41,6 +41,7 @@ import '../widgets/quick_add_task_sheet.dart';
 import '../widgets/task_flow_list.dart';
 import 'daily_shutdown_screen.dart';
 import 'focus_timer_screen.dart';
+import 'login_screen.dart';
 import 'review_screen.dart';
 import 'settings_screen.dart';
 import 'store_screen.dart';
@@ -409,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Opens quick-add, enforcing the 3-task guest cap.
   Future<void> _openQuickAdd({String? initialText}) async {
-    if (_isGuest && GuestStore.instance.atLimit) {
+    if (_isGuest && TaskRepository.instance.tasks.length >= 3) {
       await showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
@@ -445,6 +446,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _leaveGuestAndSignIn() async {
     if (!mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
+    // Push (not swap): AuthGate drops the named 'login'/'signup' routes
+    // the moment auth succeeds, giving one clean swap to the app.
+    Navigator.of(context).push(
+      SakuraPageRoute(
+        settings: const RouteSettings(name: 'login'),
+        builder: (_) => const LoginScreen(),
+      ),
+    );
   }
 
   /// Widget stats line: streak + today's progress on the launcher.

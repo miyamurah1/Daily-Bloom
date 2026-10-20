@@ -234,7 +234,10 @@ class _LoginScreenState extends State<LoginScreen> {
     AppHaptics.tap();
     await TapSound.tap();
     final result = await navigator.push(
-      SakuraPageRoute(builder: (_) => const SignupScreen()),
+      SakuraPageRoute(
+        settings: const RouteSettings(name: 'signup'),
+        builder: (_) => const SignupScreen(),
+      ),
     );
     // Signup pops with no result on success — the new account is already
     // signed in and AuthGate swaps to the app on its own. A returned

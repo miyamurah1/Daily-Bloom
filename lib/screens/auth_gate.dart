@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_store.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/motion.dart';
 import 'app_shell.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
@@ -108,6 +109,26 @@ class _AuthGateState extends State<AuthGate> {
             listenable: AuthStore.instance,
             builder: (context, _) {
               final auth = AuthStore.instance;
+              if (auth.isLoggedIn) {
+                // Auth succeeded: drop the Login/Signup routes pushed over
+                // the gate (one clean swap to the app) and retire the local
+                // guest flag so a later logout lands on the welcome gate —
+                // not an empty guest shell. Runs on every rebuild, but the
+                // predicate below stops instantly on the app's own routes.
+                final nav = Navigator.of(context);
+                if (nav.canPop() || _guestMode == true) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    nav.popUntil((r) =>
+                        r.isFirst ||
+                        (r.settings.name != 'login' &&
+                            r.settings.name != 'signup'));
+                    if (_guestMode == true) {
+                      setState(() => _guestMode = false);
+                    }
+                  });
+                }
+              }
               if (!auth.isReady) return _splash();
               if (!auth.isLoggedIn) return const LoginScreen();
               // First run: onboard before the shell.
@@ -139,8 +160,13 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   void onSignIn() {
-    // No-op trigger: the StreamBuilder will detect the new Firebase user
-    // once sign-in completes on LoginScreen and route to AppShell.
+    Navigator.of(context).push(
+      SakuraPageRoute(
+        settings: const RouteSettings(name: 'login'),
+        builder: (_) => const LoginScreen(),
+      ),
+    );
+      // Once auth succeeds the gate pops this named route itself.
   }
 
   /// Themed splash: resolves through the active Sakura theme so cold
