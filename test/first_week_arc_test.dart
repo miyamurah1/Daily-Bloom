@@ -1,51 +1,45 @@
-import 'package:daily_bloom/game/first_week_arc.dart';
+// First-week arc: the nameplate is a one-time hero intro — it shows on the
+// first launch, then collapses to the thin prompt row forever after.
+import 'package:daily_bloom/screens/home_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// First-week arc: a fresh install sees plant → plan → focus in order,
-// and never again once complete. v1.0's "staked" step migrates forward.
+Future<void> _pumpHome(WidgetTester tester) async {
+  await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 2));
+}
+
 void main() {
-  setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    FirstWeekArc.instance.debugReset();
-    await FirstWeekArc.instance.load();
+  setUp(() => SharedPreferences.setMockInitialValues({
+        'bloom_concept_seen_v1': true,
+      }));
+
+  testWidgets('nameplate shows on first launch', (tester) async {
+    await _pumpHome(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('YOUR FIRST WEEK'), findsOneWidget);
   });
 
-  tearDown(() => FirstWeekArc.instance.debugReset());
+  testWidgets('nameplate collapses after the arc is opened once',
+      (tester) async {
+    await _pumpHome(tester);
+    expect(find.text('YOUR FIRST WEEK'), findsOneWidget);
 
-  test('arc starts at planting and finishes after all three', () async {
-    expect(FirstWeekArc.instance.nextStep, 0);
-    expect(FirstWeekArc.instance.prompt, contains('3'));
+    // Open the arc (step 0 opens the quick-add sheet), then dismiss it.
+    await tester.tap(find.byKey(const ValueKey('home_arc_card')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('YOUR FIRST WEEK'), findsNothing);
 
-    await FirstWeekArc.instance.report(FirstWeekStep.planted);
-    expect(FirstWeekArc.instance.nextStep, 1);
-    expect(FirstWeekArc.instance.prompt, contains('Plan my day'));
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
-    await FirstWeekArc.instance.report(FirstWeekStep.planned);
-    expect(FirstWeekArc.instance.nextStep, 2);
-    expect(FirstWeekArc.instance.prompt, contains('focus session'));
-
-    await FirstWeekArc.instance.report(FirstWeekStep.focused);
-    expect(FirstWeekArc.instance.isComplete, isTrue);
-    expect(FirstWeekArc.instance.nextStep, isNull);
-    expect(FirstWeekArc.instance.prompt, isEmpty);
-  });
-
-  test('arc state survives a reload', () async {
-    await FirstWeekArc.instance.report(FirstWeekStep.planned);
-    FirstWeekArc.instance.debugReset();
-    await FirstWeekArc.instance.load();
-    expect(FirstWeekArc.instance.planned, isTrue);
-    expect(FirstWeekArc.instance.nextStep, 0);
-  });
-
-  test('v1.0 staked step migrates to focused', () async {
-    FirstWeekArc.instance.debugReset();
-    SharedPreferences.setMockInitialValues({'first_arc_staked': true});
-    await FirstWeekArc.instance.load();
-    expect(FirstWeekArc.instance.focused, isTrue);
-    // The legacy key is retired once read.
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.containsKey('first_arc_staked'), isFalse);
+    // Persisted: a fresh Home never shows the nameplate again.
+    await _pumpHome(tester);
+    expect(find.text('YOUR FIRST WEEK'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

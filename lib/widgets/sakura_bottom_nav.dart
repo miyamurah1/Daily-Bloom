@@ -28,7 +28,7 @@ class SakuraBottomNav extends StatelessWidget {
 
   static const labels = [
     'Today',
-    'Rituals',
+    'Habits',
     'Folders',
     'Insights',
   ];

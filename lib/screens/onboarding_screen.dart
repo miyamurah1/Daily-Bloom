@@ -6,6 +6,7 @@ import '../data/habit_store.dart';
 import '../data/profile_name.dart';
 import '../data/reminders.dart';
 import '../data/simple_mode.dart';
+import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 
@@ -32,6 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Step 4 personalization — all optional; Skip never seeds anything.
   String _name = '';
+  String _firstTask = '';
   int _focusIndex = 0;
   bool _wantReminder = false;
   bool _simpleMode = true;
@@ -51,6 +53,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       // Name powers the home greeting; the chosen focus plants one tiny
       // starter ritual (idempotent — the store dedupes by name).
       await ProfileName.write(_name);
+      if (_firstTask.trim().isNotEmpty) {
+        try {
+          await TaskRepository.instance.createTask(
+            title: _firstTask.trim(),
+            folder: 'Productivity',
+            tag: 'General',
+          );
+        } catch (_) {}
+      }
       if (_focusIndex < RitualPresets.presets.length) {
         try {
           await HabitStore.instance.load();
@@ -104,7 +115,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   const _Slide(
                     icon: LucideIcons.flower,
                     title: 'Welcome to Daily Bloom',
-                    subtitle: 'Your mindful task garden.',
+                    subtitle: 'Complete tasks. See proof. Grow.',
                   ),
                   const _Slide(
                     icon: LucideIcons.flame,
@@ -120,10 +131,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   _PersonalizeStep(
                     name: _name,
+                    firstTask: _firstTask,
                     focusIndex: _focusIndex,
                     reminderOn: _wantReminder,
                     simpleOn: _simpleMode,
                     onName: (v) => _name = v,
+                    onFirstTask: (v) => _firstTask = v,
                     onFocus: (i) => setState(() => _focusIndex = i),
                     onReminder: (v) => setState(() => _wantReminder = v),
                     onSimple: (v) => setState(() => _simpleMode = v),
@@ -298,20 +311,24 @@ class _PersonalizeStep extends StatelessWidget {
   ];
 
   final String name;
+  final String firstTask;
   final int focusIndex;
   final bool reminderOn;
   final bool simpleOn;
   final ValueChanged<String> onName;
+  final ValueChanged<String> onFirstTask;
   final ValueChanged<int> onFocus;
   final ValueChanged<bool> onReminder;
   final ValueChanged<bool> onSimple;
 
   const _PersonalizeStep({
     required this.name,
+    required this.firstTask,
     required this.focusIndex,
     required this.reminderOn,
     required this.simpleOn,
     required this.onName,
+    required this.onFirstTask,
     required this.onFocus,
     required this.onReminder,
     required this.onSimple,
@@ -419,6 +436,18 @@ class _PersonalizeStep extends StatelessWidget {
             decoration: const InputDecoration(
               labelText: 'What should we call you?',
               hintText: 'Your name',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            onChanged: onFirstTask,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'What is the single most important thing today?',
+              hintText: 'e.g. Meditate 10 mins',
               border: OutlineInputBorder(),
               isDense: true,
             ),

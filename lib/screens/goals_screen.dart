@@ -153,23 +153,33 @@ class _GoalsScreenState extends State<GoalsScreen> {
         ),
         const SizedBox(height: 2),
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'GOALS',
-              style: TextStyle(
-                fontSize: 10,
-                letterSpacing: 3.2,
-                fontWeight: FontWeight.w600,
-                color: SakuraColors.inkFaint,
+            Flexible(
+              child: Text(
+                'GOALS',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 3.2,
+                  fontWeight: FontWeight.w600,
+                  color: SakuraColors.inkFaint,
+                ),
               ),
             ),
-            const Spacer(),
-            Text(
-              '● on this device',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: SakuraColors.primary,
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                '● on this device',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: SakuraColors.primary,
+                ),
               ),
             ),
           ],

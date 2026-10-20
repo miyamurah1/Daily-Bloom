@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -12,14 +12,15 @@ import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/habit_store.dart';
 import '../data/mock_data.dart';
+import '../data/task_repository.dart';
 import '../data/weekly_review.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/share_card.dart';
 
-/// Weekly review: Mon–Sun numbers with one honest verdict.
+/// Weekly review: Monâ€“Sun numbers with one honest verdict.
 ///
 /// Built client-side from the same endpoints as History + Insights
-/// (done tasks, `/api/insights`, local habit logs) — no new API.
+/// (done tasks, `/api/insights`, local habit logs) â€” no new API.
 /// Offline shows an honest empty card, never last week's numbers as
 /// if they were fresh.
 class ReviewScreen extends StatefulWidget {
@@ -38,6 +39,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   WeeklyReview? _data;
   bool _loading = true;
   bool _offline = false;
+  List<Task> _incomplete = const [];
 
   bool get _shareable {
     final d = _data;
@@ -54,15 +56,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
     try {
       final results = await Future.wait([
         _api.fetchTasks(status: 'done', withDetails: false),
+        _api.fetchTasks(status: 'todo', withDetails: false),
         _api.fetchInsights(),
       ]);
       if (!mounted) return;
       setState(() {
         _data = buildWeeklyReview(
           done: results[0] as List<Task>,
-          ins: results[1] as Insights,
+          ins: results[2] as Insights,
           habits: HabitStore.instance.habits,
         );
+        _incomplete = results[1] as List<Task>;
         _loading = false;
         _offline = false;
       });
@@ -75,6 +79,23 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _offline = true;
       });
     }
+  }
+
+  Future<void> _carryForward(Task t) async {
+    try {
+      await TaskRepository.instance.moveTask(t.id, 'todo');
+      // Reschedule to next week by updating due date
+      final nextWeek = DateTime.now().add(const Duration(days: 7));
+      await TaskRepository.instance.updateTask(t.id, dueAt: nextWeek);
+      setState(() => _incomplete.removeWhere((x) => x.id == t.id));
+    } catch (_) {}
+  }
+
+  Future<void> _archive(Task t) async {
+    try {
+      await TaskRepository.instance.moveTask(t.id, 'done');
+      setState(() => _incomplete.removeWhere((x) => x.id == t.id));
+    } catch (_) {}
   }
 
   Future<void> _sharePreview() async {
@@ -117,7 +138,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '週',
+              'é€±',
               style: TextStyle(
                 fontSize: 22,
                 height: 1.0,
@@ -127,7 +148,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
             ),
             Text(
-              'WEEKLY REVIEW · ${reviewWeekLabel().toUpperCase()}',
+              'WEEKLY REVIEW Â· ${reviewWeekLabel().toUpperCase()}',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 3.2,
@@ -181,8 +202,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       body: data.verdict,
                     )
                   else ...[
-                    _VerdictCard(text: data.verdict),
+                    _VerdictCard(text: data.verdict, carry: data.carry),
                     const SizedBox(height: 12),
+                    if (_incomplete.isNotEmpty) ...[
+                      _TriageCard(
+                        tasks: _incomplete,
+                        onCarry: (t) => _carryForward(t),
+                        onArchive: (t) => _archive(t),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Row(
                       children: [
                         Expanded(
@@ -215,7 +244,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
 class _VerdictCard extends StatelessWidget {
   final String text;
-  const _VerdictCard({required this.text});
+  final String carry;
+  const _VerdictCard({required this.text, required this.carry});
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +272,27 @@ class _VerdictCard extends StatelessWidget {
               height: 1.55,
               fontWeight: FontWeight.w600,
               color: SakuraColors.ink,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: SakuraColors.cardBorder),
+          const SizedBox(height: 12),
+          Text(
+            'CARRY INTO NEXT WEEK',
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 2.0,
+              fontWeight: FontWeight.w700,
+              color: SakuraColors.primary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            carry,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.5,
+              color: SakuraColors.inkSoft,
             ),
           ),
         ],
@@ -300,11 +351,11 @@ class _StandoutsCard extends StatelessWidget {
     final rows = <Widget>[];
     if (data.bestDay != null && data.bestDayCount >= 2) {
       rows.add(_row(LucideIcons.flame, 'Best day',
-          '${data.bestDay} · ${data.bestDayCount} done'));
+          '${data.bestDay} Â· ${data.bestDayCount} done'));
     }
     if (data.topTag != null) {
       rows.add(_row(LucideIcons.tag, 'Top tag',
-          '${data.topTag} · ${(100 * data.topTagRate).round()}%'));
+          '${data.topTag} Â· ${(100 * data.topTagRate).round()}%'));
     }
     if (data.habitsTotal > 0) {
       rows.add(_row(
@@ -385,10 +436,10 @@ class _StreakCard extends StatelessWidget {
           Expanded(
             child: Text(
               data.streakCurrent > 0
-                  ? '${data.streakCurrent}-day streak · best ${data.streakBest} (30d)'
+                  ? '${data.streakCurrent}-day streak Â· best ${data.streakBest} (30d)'
                   : data.streakBest > 1
-                      ? 'Streak paused · best ${data.streakBest} (30d)'
-                      : 'No streak yet — today is day one.',
+                      ? 'Streak paused Â· best ${data.streakBest} (30d)'
+                      : 'No streak yet â€” today is day one.',
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.5,
@@ -468,7 +519,7 @@ class _OfflineCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: SakuraColors.ink)),
           const SizedBox(height: 6),
-          Text('Connect to review your week — numbers stay on the server.',
+          Text('Connect to review your week â€” numbers stay on the server.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 12.5, height: 1.55, color: SakuraColors.inkSoft)),
@@ -487,7 +538,7 @@ String shareTextFor(WeeklyReview r) {
     '${r.activeDays} active days',
   ];
   var out =
-      'My week in bloom (${reviewWeekLabel(r.weekStart)}): ${bits.join(' · ')}.';
+      'My week in bloom (${reviewWeekLabel(r.weekStart)}): ${bits.join(' Â· ')}.';
   if (r.streakCurrent > 0) out += ' ${r.streakCurrent}-day streak.';
   return out;
 }
@@ -541,7 +592,7 @@ class _SharePreviewState extends State<_SharePreview> {
       await Clipboard.setData(
           ClipboardData(text: shareTextFor(widget.data)));
     } catch (_) {
-      // Clipboard unavailable (some test harnesses) — nothing to do.
+      // Clipboard unavailable (some test harnesses) â€” nothing to do.
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -583,7 +634,7 @@ class _SharePreviewState extends State<_SharePreview> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(LucideIcons.share2, size: 16),
-              label: Text(_busy ? 'Preparing…' : 'Share image',
+              label: Text(_busy ? 'Preparingâ€¦' : 'Share image',
                   style:
                       const TextStyle(fontWeight: FontWeight.w700)),
             ),
@@ -595,6 +646,66 @@ class _SharePreviewState extends State<_SharePreview> {
                     fontSize: 12.5,
                     color: SakuraColors.inkSoft)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TriageCard extends StatelessWidget {
+  final List<Task> tasks;
+  final ValueChanged<Task> onCarry;
+  final ValueChanged<Task> onArchive;
+
+  const _TriageCard({
+    required this.tasks,
+    required this.onCarry,
+    required this.onArchive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: SakuraTheme.cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'SUNDAY RESET - CARRY OR LET GO',
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 2.0,
+              fontWeight: FontWeight.w700,
+              color: SakuraColors.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (final t in tasks) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    t.title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: SakuraColors.ink,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => onCarry(t),
+                  child: const Text('Carry'),
+                ),
+                TextButton(
+                  onPressed: () => onArchive(t),
+                  child: const Text('Let go'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
         ],
       ),
     );

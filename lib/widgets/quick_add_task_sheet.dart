@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
@@ -15,7 +15,7 @@ import 'bloom_snackbar.dart';
 /// Modal bottom sheet behind the shell FAB: type a title, pick a folder
 /// and tag, and plant immediately into [TaskRepository] (optimistic +
 /// locally persisted, so it works offline too). [initialText] prefills
-/// the title — the share-sheet entry point.
+/// the title â€” the share-sheet entry point.
 Future<void> showQuickAddTask(BuildContext context, {String? initialText}) {
   return showModalBottomSheet<void>(
     context: context,
@@ -60,6 +60,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
   String? _aiHint;
   DateTime? _dueAt;
   String _priority = 'none';
+  bool _repeatsDaily = false;
 
   /// Voice capture: dictation appends into the title field, then the
   /// normal Auto-fill/Plant flow takes over. Unavailable platforms
@@ -82,7 +83,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     }
     if (!available || !mounted) {
       if (mounted) {
-        showBloomSnackBar(context, 'Voice not available here — type instead.');
+        showBloomSnackBar(context, 'Voice not available here â€” type instead.');
       }
       return;
     }
@@ -114,7 +115,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     }
   }
 
-  /// True while the post-plant 🌱 flourish plays; the sheet pops when the
+  /// True while the post-plant ðŸŒ± flourish plays; the sheet pops when the
   /// grow animation ends (ticker-driven, no bare timers).
   bool _growing = false;
   String _plantedTitle = '';
@@ -171,7 +172,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
           parsed.tag,
           if (parsed.priority == 'high') 'high priority',
           if (!parsed.fromAi) 'offline parse',
-        ].join(' · ');
+        ].join(' Â· ');
       });
       AppHaptics.tap();
     } finally {
@@ -188,10 +189,11 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     setState(() => _saving = true);
     AppHaptics.tap();
     // Optimistic: the repository inserts the task synchronously, so play
-    // the 🌱 immediately instead of blocking on a network round-trip
+    // the ðŸŒ± immediately instead of blocking on a network round-trip
     // (offline it would otherwise stall until the request times out).
     unawaited(TaskRepository.instance.createTask(
-        title: title, folder: _folder, tag: _tag, dueAt: _dueAt, priority: _priority));
+        title: title, folder: _folder, tag: _tag, dueAt: _dueAt, priority: _priority,
+        cadence: _repeatsDaily ? 'daily' : 'once'));
     setState(() {
       _plantedTitle = title;
       _growing = true;
@@ -200,12 +202,12 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     TapSound.tap();
   }
 
-  /// Called when the 🌱 grow animation completes: dismiss + confirm.
+  /// Called when the ðŸŒ± grow animation completes: dismiss + confirm.
   void _finishPlant() {
     if (!mounted) return;
     final navigator = Navigator.of(context);
     navigator.pop();
-    showBloomSnackBar(context, 'Planted "$_plantedTitle" 🌱');
+    showBloomSnackBar(context, 'Planted "$_plantedTitle" ðŸŒ±');
   }
 
   Widget _sproutFlourish() {
@@ -224,7 +226,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
         ),
         child: Semantics(
           label: 'Task planted',
-          child: const Text('🌱', style: TextStyle(fontSize: 34)),
+          child: const Text('ðŸŒ±', style: TextStyle(fontSize: 34)),
         ),
       ),
     );
@@ -348,7 +350,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _aiLoading ? 'Reading…' : 'Auto-fill with AI',
+                      _aiLoading ? 'Readingâ€¦' : 'Auto-fill with AI',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -373,20 +375,51 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              _PickerRow(
-                label: 'FOLDER',
-                options: _folders,
-                selected: _folder,
-                icon: LucideIcons.folder,
-                onSelect: (v) => setState(() => _folder = v),
-              ),
-              const SizedBox(height: 12),
-              _PickerRow(
-                label: 'TAG',
-                options: _tags,
-                selected: _tag,
-                icon: LucideIcons.tag,
-                onSelect: (v) => setState(() => _tag = v),
+              // Unified Action: one capture, one toggle. The app infers
+              // the type — no "Tasks vs Habits vs Rituals" decision.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: SakuraColors.background,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: SakuraColors.cardBorder),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.repeat, size: 18, color: SakuraColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Repeats daily',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: SakuraColors.ink,
+                            ),
+                          ),
+                          Text(
+                            _repeatsDaily
+                                ? 'Daily habit — shows every morning'
+                                : 'One-time task',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: SakuraColors.inkFaint,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: _repeatsDaily,
+                      onChanged: (v) => setState(() => _repeatsDaily = v),
+                      activeThumbColor: SakuraColors.primary,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 18),
               SizedBox(
@@ -412,7 +445,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                               )
                             : const Icon(LucideIcons.plus, size: 18),
                         label: Text(
-                          _saving ? 'Planting…' : 'Plant bloom',
+                          _saving ? 'Plantingâ€¦' : 'Plant bloom',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -464,85 +497,6 @@ class _SpringInState extends State<_SpringIn>
         );
       },
       child: widget.child,
-    );
-  }
-}
-
-class _PickerRow extends StatelessWidget {
-  final String label;
-  final List<String> options;
-  final String selected;
-  final IconData icon;
-  final ValueChanged<String> onSelect;
-
-  const _PickerRow({
-    required this.label,
-    required this.options,
-    required this.selected,
-    required this.icon,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 12, color: SakuraColors.inkFaint),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                letterSpacing: 2.0,
-                fontWeight: FontWeight.w700,
-                color: SakuraColors.inkFaint,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final o in options)
-              GestureDetector(
-                onTap: () => onSelect(o),
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: AppMotion.toggle,
-                  curve: AppMotion.toggleCurve,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: o == selected
-                        ? SakuraColors.primary.withValues(alpha: 0.14)
-                        : SakuraColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: o == selected
-                          ? SakuraColors.primary
-                          : SakuraColors.cardBorder,
-                    ),
-                  ),
-                  child: Text(
-                    o,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: o == selected
-                          ? SakuraColors.primary
-                          : SakuraColors.inkSoft,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
     );
   }
 }

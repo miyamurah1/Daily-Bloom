@@ -112,13 +112,14 @@ class DailyBloomApp extends StatelessWidget {
         theme: SakuraTheme.buildTheme(),
         // Coarse screen views (forward-only; silent before Firebase init).
         navigatorObservers: [BloomRouteObserver()],
-        // Cap system text scaling at 1.3x: the layout stays legible for
-        // accessibility without the sub-12px labels blowing out cards.
+        // Support system text scaling up to 200% (accessibility guideline).
+        // Beyond that, extreme OS settings are clamped so core controls keep
+        // their tap targets; nothing below 200% is capped.
         builder: (context, child) {
           final mq = MediaQuery.of(context);
           return MediaQuery(
             data: mq.copyWith(
-              textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3),
+              textScaler: mq.textScaler.clamp(maxScaleFactor: 2.0),
             ),
             child: child!,
           );

@@ -26,7 +26,7 @@ void main() {
 
   test('bottom nav consolidates to four ergonomic tabs', () {
     expect(SakuraBottomNav.items.length, 4);
-    expect(SakuraBottomNav.labels, ['Today', 'Rituals', 'Folders', 'Insights']);
+    expect(SakuraBottomNav.labels, ['Today', 'Habits', 'Folders', 'Insights']);
   });
 
   testWidgets('card body opens, ring completes, subtasks toggle freely',

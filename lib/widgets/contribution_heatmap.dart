@@ -74,7 +74,7 @@ class ContributionHeatmap extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'A quiet year, waiting',
+                      'Your proof',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -84,7 +84,7 @@ class ContributionHeatmap extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Every square is one day — finish something to paint it.',
+                      'Complete tasks. See proof. Grow.',
                       style: TextStyle(
                         fontSize: 12,
                         height: 1.45,

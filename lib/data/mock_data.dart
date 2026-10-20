@@ -23,6 +23,24 @@ class Task {
   final DateTime? createdAt;
   final DateTime? completedAt;
 
+  /// Commitment cadence: 'once' (a task) or 'daily' (a habit). The
+  /// unifying seam between the two formerly separate models — a habit
+  /// is just a commitment you tend every day.
+  final String cadence;
+
+  /// Habit-only fields (ignored when [cadence] == 'once'). Kept on
+  /// [Task] so a single model carries both kinds.
+  final bool habitCounted;
+  final num habitTarget;
+  final String habitUnit;
+  final String? habitGoalId;
+  final int habitIconIndex;
+  final int habitAccentIndex;
+  final bool habitPaused;
+  final Map<String, num> habitLog;
+  final bool habitFrozen;
+  final int habitFrozenStreak;
+
   const Task({
     required this.id,
     required this.title,
@@ -40,6 +58,17 @@ class Task {
     this.focusMinutes,
     this.createdAt,
     this.completedAt,
+    this.cadence = 'once',
+    this.habitCounted = false,
+    this.habitTarget = 1,
+    this.habitUnit = '',
+    this.habitGoalId,
+    this.habitIconIndex = 0,
+    this.habitAccentIndex = 0,
+    this.habitPaused = false,
+    this.habitLog = const <String, num>{},
+    this.habitFrozen = false,
+    this.habitFrozenStreak = 0,
   });
 
   factory Task.fromJson(Map<String, dynamic> j) => Task(
@@ -71,6 +100,21 @@ class Task {
         focusMinutes: j['focus_minutes'] == null
             ? null
             : (j['focus_minutes'] as num).toInt(),
+        cadence: '${j['cadence'] ?? 'once'}',
+        habitCounted: j['habit_counted'] == true,
+        habitTarget: (j['habit_target'] as num?) ?? 1,
+        habitUnit: '${j['habit_unit'] ?? ''}',
+        habitGoalId: j['habit_goal_id'] == null
+            ? null
+            : '${j['habit_goal_id']}',
+        habitIconIndex: (j['habit_icon'] as num?)?.toInt() ?? 0,
+        habitAccentIndex: (j['habit_accent'] as num?)?.toInt() ?? 0,
+        habitPaused: j['habit_paused'] == true,
+        habitLog: j['habit_log'] is Map
+            ? Map<String, num>.from(j['habit_log'] as Map)
+            : const {},
+        habitFrozen: j['habit_frozen'] == true,
+        habitFrozenStreak: (j['habit_frozen_streak'] as num?)?.toInt() ?? 0,
       );
 
   /// Backup serialization: mirrors [fromJson] keys so an export
@@ -119,6 +163,17 @@ class Task {
     int? focusMinutes,
     DateTime? createdAt,
     DateTime? completedAt,
+    String? cadence,
+    bool? habitCounted,
+    num? habitTarget,
+    String? habitUnit,
+    String? Function()? habitGoalId,
+    int? habitIconIndex,
+    int? habitAccentIndex,
+    bool? habitPaused,
+    Map<String, num>? habitLog,
+    bool? habitFrozen,
+    int? habitFrozenStreak,
   }) =>
       Task(
         id: id,
@@ -137,7 +192,28 @@ class Task {
         focusMinutes: focusMinutes ?? this.focusMinutes,
         createdAt: createdAt ?? this.createdAt,
         completedAt: completedAt ?? this.completedAt,
+        cadence: cadence ?? this.cadence,
+        habitCounted: habitCounted ?? this.habitCounted,
+        habitTarget: habitTarget ?? this.habitTarget,
+        habitUnit: habitUnit ?? this.habitUnit,
+        habitGoalId: habitGoalId != null ? habitGoalId() : this.habitGoalId,
+        habitIconIndex: habitIconIndex ?? this.habitIconIndex,
+        habitAccentIndex: habitAccentIndex ?? this.habitAccentIndex,
+        habitPaused: habitPaused ?? this.habitPaused,
+        habitLog: habitLog ?? this.habitLog,
+        habitFrozen: habitFrozen ?? this.habitFrozen,
+        habitFrozenStreak: habitFrozenStreak ?? this.habitFrozenStreak,
       );
+
+  /// A habit is a daily commitment; a task is a one-off.
+  bool get isHabit => cadence == 'daily';
+
+  /// Whether the commitment is done for the given day key (habit only).
+  bool doneOn(String dayKey) {
+    if (cadence != 'daily') return status == 'done';
+    final threshold = habitCounted ? habitTarget : 1;
+    return (habitLog[dayKey] ?? 0) >= threshold;
+  }
 }
 
 /// Kanban-correct loop: completing from anywhere lands in done;

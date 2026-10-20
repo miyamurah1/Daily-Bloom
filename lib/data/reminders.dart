@@ -236,8 +236,8 @@ class ReminderService extends ChangeNotifier {
   /// than a generic sentence. Static + pure: unit-tested headless.
   @visibleForTesting
   static String dailyBody(int streak) => streak > 0
-      ? 'Day $streak — your garden is waiting.'
-      : 'One small task today keeps the streak alive.';
+      ? 'Good morning. Just 3 seeds today. Which one will you start with? (Day $streak)'
+      : 'Good morning. One small task today keeps the streak alive.';
 
   Future<bool> _requestPermission() async {
     try {

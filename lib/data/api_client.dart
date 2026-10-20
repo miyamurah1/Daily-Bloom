@@ -129,6 +129,7 @@ class BloomApi {
     String recurring = 'none',
     DateTime? dueAt,
     String? clientId,
+    String cadence = 'once',
   }) async {
     final uri = Uri.parse('$baseUrl/api/tasks');
     final res = await _client
@@ -142,6 +143,7 @@ class BloomApi {
             'description': description,
             'priority': priority,
             'recurring': recurring,
+            'cadence': cadence,
             if (dueAt != null) 'due_at': dueAt.toUtc().toIso8601String(),
             if (clientId != null) 'client_id': clientId,
           }),

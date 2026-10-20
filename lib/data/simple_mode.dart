@@ -10,7 +10,7 @@ class SimpleMode extends ChangeNotifier {
   static final SimpleMode instance = SimpleMode._();
   SimpleMode._();
 
-  bool _enabled = false;
+  bool _enabled = true; // calm default for new installs; stored value wins after load
   bool _loaded = false;
 
   bool get enabled => _enabled;
@@ -20,7 +20,7 @@ class SimpleMode extends ChangeNotifier {
     if (_loaded) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      _enabled = prefs.getBool(_kEnabled) ?? false;
+      _enabled = prefs.getBool(_kEnabled) ?? true;
     } catch (_) {}
     _loaded = true;
   }

@@ -12,26 +12,28 @@ import 'package:daily_bloom/main.dart';
 
 void main() {
 
-  testWidgets('Boot shows login when no session is stored', (WidgetTester tester) async {
+  testWidgets('Boot shows welcome gate when no session is stored', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const DailyBloomApp());
-    // Splash first (restore is async), then login. Avoid pumpAndSettle:
-    // the splash spinner never "settles".
+    // Splash first (restore is async), then welcome gate. Avoid
+    // pumpAndSettle: the splash spinner never "settles".
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('WELCOME BACK'), findsOneWidget);
-    expect(find.text('Log in'), findsWidgets);
+    expect(find.text('Daily Bloom'), findsOneWidget);
+    expect(find.text('Continue as Guest'), findsOneWidget);
+    expect(find.text('Sign In'), findsOneWidget);
   });
 
-  testWidgets('Signup link is visible on login', (WidgetTester tester) async {
+  testWidgets('Welcome gate offers guest and sign-in', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const DailyBloomApp());
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('Create an account'), findsOneWidget);
+    expect(find.text('One task. One timer. One focus.'), findsOneWidget);
+    expect(find.textContaining('Add up to 3 tasks'), findsOneWidget);
   });
 }

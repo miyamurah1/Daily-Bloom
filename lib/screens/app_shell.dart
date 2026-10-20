@@ -42,7 +42,9 @@ import 'task_detail_screen.dart';
 /// - Tab switch is instant ([IndexedStack]) — per-page [Entrance]
 ///   animations carry the delight, not a full-page AnimatedSwitcher fade.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  final bool guest;
+
+  const AppShell({super.key, this.guest = false});
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -51,6 +53,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell>
     with WidgetsBindingObserver {
   int _index = 0;
+  bool get _isGuest => widget.guest;
 
   /// Tabs the user has actually visited. Unvisited tabs render a
   /// lightweight placeholder so cold start only pays for Today (1 API
@@ -79,6 +82,11 @@ class _AppShellState extends State<AppShell>
     // Every task mutation anywhere in the app must refresh the widget's
     // ✓ flags — hence the repo listener at the shell, not per-screen.
     TaskRepository.instance.addListener(_syncWidgetDoneFlags);
+
+    // Guest mode: work entirely from local cache, never sync.
+    if (_isGuest) {
+      TaskRepository.instance.setGuestMode(true);
+    }
   }
 
   /// Route a widget tap: the ✓ button completes its task, a task row
@@ -227,7 +235,7 @@ class _AppShellState extends State<AppShell>
     switch (i) {
       case 0:
         // ignore: prefer_const_constructors
-        page = HomeScreen(embedded: true);
+        page = HomeScreen(embedded: true, guest: _isGuest);
         break;
       case 1:
         // Rituals = Habits + Goals hub (mirrors the Insights hub).

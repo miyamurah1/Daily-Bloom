@@ -66,6 +66,51 @@ class TaskRepository extends ChangeNotifier {
   final Map<String, List<TaskEvent>> _eventsCache = {};
   final Map<String, FocusHistory> _focusCache = {};
 
+  /// When true, all backend API calls are skipped and the repo works
+  /// entirely from the local SharedPreferences cache. Used for guest mode.
+  bool get guestMode => _guestMode;
+  bool _guestMode = false;
+
+  /// Enable guest mode: stop syncing, work from local cache only.
+  Future<void> setGuestMode(bool value) async {
+    _guestMode = value;
+    if (value) {
+      // Stop background retries; guests never sync.
+      _retryTimer?.cancel();
+    }
+    notifyListeners();
+  }
+
+  /// Migrate guest tasks into the synced repository after sign-in.
+  ///
+  /// Each guest entry is created via the normal [createTask] path (full
+  /// optimistic + outbox flow), so migration is offline-safe: unreachable
+  /// backend just queues the creates for replay. Returns the number of
+  /// tasks migrated. Callers should clear the guest store + guest flag
+  /// afterwards.
+  Future<int> migrateGuestTasks(
+      List<Map<String, dynamic>> guestTasks) async {
+    if (guestTasks.isEmpty) return 0;
+    var migrated = 0;
+    for (final g in guestTasks) {
+      final title = (g['title'] as String? ?? '').trim();
+      if (title.isEmpty) continue;
+      try {
+        await createTask(
+          title: title,
+          folder: (g['folder'] as String?) ?? 'Productivity',
+        );
+        migrated++;
+      } catch (_) {
+        // Keep going: one bad entry must not strand the rest. The
+        // failed create stays out of the repo; the guest store is only
+        // cleared on full success by the caller.
+        break;
+      }
+    }
+    return migrated;
+  }
+
   List<Task> get tasks => List.unmodifiable(_tasks);
   bool get isLoading => _loading;
   String? get error => _error;
@@ -80,6 +125,53 @@ class TaskRepository extends ChangeNotifier {
   List<Task> get todoTasks => _tasks.where((t) => t.status == 'todo').toList();
   List<Task> get inProgressTasks => _tasks.where((t) => t.status == 'in_progress').toList();
   List<Task> get doneTasks => _tasks.where((t) => t.status == 'done').toList();
+
+  /// Date-aware getters (Master Blueprint Phase 1): prevent "Next Week"
+  /// tasks from leaking into Today's view.
+
+  /// Tasks due today, overdue, or with no due date (inbox).
+  List<Task> get todayTasks {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _tasks.where((t) {
+      if (t.status != 'todo') return false;
+      if (t.dueAt == null) return true; // inbox/unscheduled
+      final due = DateTime(t.dueAt!.year, t.dueAt!.month, t.dueAt!.day);
+      return !due.isAfter(today); // today or past (overdue)
+    }).toList();
+  }
+
+  /// Tasks due strictly after today.
+  List<Task> get upcomingTasks {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _tasks.where((t) {
+      if (t.status != 'todo') return false;
+      if (t.dueAt == null) return false;
+      final due = DateTime(t.dueAt!.year, t.dueAt!.month, t.dueAt!.day);
+      return due.isAfter(today);
+    }).toList();
+  }
+
+  /// Tasks due in the next calendar week (Monday to Sunday).
+  List<Task> get nextWeekTasks {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Find next Monday
+    final daysToMonday = (8 - today.weekday) % 7;
+    final nextMonday = today.add(Duration(days: daysToMonday == 0 ? 7 : daysToMonday));
+    final nextSunday = nextMonday.add(const Duration(days: 6));
+    return _tasks.where((t) {
+      if (t.status != 'todo') return false;
+      if (t.dueAt == null) return false;
+      final due = DateTime(t.dueAt!.year, t.dueAt!.month, t.dueAt!.day);
+      return !due.isBefore(nextMonday) && !due.isAfter(nextSunday);
+    }).toList();
+  }
+
+  /// Tasks with no due date (backlog / someday).
+  List<Task> get somedayTasks =>
+      _tasks.where((t) => t.status == 'todo' && t.dueAt == null).toList();
 
   List<Task> tasksForFolder(String folder) =>
       _tasks.where((t) => t.folder.toLowerCase() == folder.toLowerCase()).toList();
@@ -101,6 +193,18 @@ class TaskRepository extends ChangeNotifier {
     if (loggedIn) {
       await loadRemote();
     }
+  }
+
+  /// Test seam: wipe in-memory state so tests start clean.
+  @visibleForTesting
+  void debugReset() {
+    _tasks = [];
+    _outbox.clear();
+    _deadLetters.clear();
+    _loading = false;
+    _error = null;
+    _isInitialized = false;
+    notifyListeners();
   }
 
   // --- Offline outbox ------------------------------------------------
@@ -398,6 +502,17 @@ class TaskRepository extends ChangeNotifier {
                           'completed_at': s.completedAt?.toIso8601String(),
                         })
                     .toList(),
+                'cadence': t.cadence,
+                'habit_counted': t.habitCounted,
+                'habit_target': t.habitTarget,
+                'habit_unit': t.habitUnit,
+                'habit_goal_id': t.habitGoalId,
+                'habit_icon': t.habitIconIndex,
+                'habit_accent': t.habitAccentIndex,
+                'habit_paused': t.habitPaused,
+                'habit_log': t.habitLog,
+                'habit_frozen': t.habitFrozen,
+                'habit_frozen_streak': t.habitFrozenStreak,
               })
           .toList());
       await prefs.setString(_kTasksCache, raw);
@@ -405,6 +520,15 @@ class TaskRepository extends ChangeNotifier {
   }
 
   Future<void> loadRemote({bool withDetails = true}) async {
+    // Guest mode: never hit the API, just load from local cache.
+    if (_guestMode) {
+      _loading = true;
+      notifyListeners();
+      await _loadFromLocalCache();
+      _loading = false;
+      notifyListeners();
+      return;
+    }
     _loading = true;
     _error = null;
     notifyListeners();
@@ -435,6 +559,7 @@ class TaskRepository extends ChangeNotifier {
     String priority = 'none',
     String recurring = 'none',
     DateTime? dueAt,
+    String cadence = 'once',
   }) async {
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     // Activation checkpoint: first real task ever (temp rows excluded).
@@ -449,6 +574,7 @@ class TaskRepository extends ChangeNotifier {
       recurring: recurring,
       status: 'todo',
       dueAt: dueAt,
+      cadence: cadence,
     );
 
     // Prepend to memory
@@ -456,6 +582,9 @@ class TaskRepository extends ChangeNotifier {
     notifyListeners();
     await _saveToLocalCache();
     BloomAnalytics.taskCreated(isFirst: isFirst);
+
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return optimisticTask;
 
     try {
       final serverTask = await _api.createTask(
@@ -466,6 +595,7 @@ class TaskRepository extends ChangeNotifier {
         priority: priority,
         recurring: recurring,
         dueAt: dueAt,
+        cadence: cadence,
         clientId: tempId,
       );
       final idx = _tasks.indexWhere((t) => t.id == tempId);
@@ -488,6 +618,7 @@ class TaskRepository extends ChangeNotifier {
           'description': description.trim(),
           'priority': priority,
           'recurring': recurring,
+          'cadence': cadence,
           'due_at': dueAt?.toIso8601String(),
         },
       });
@@ -510,6 +641,9 @@ class TaskRepository extends ChangeNotifier {
         BloomAnalytics.taskCompleted();
       }
     }
+
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
 
     try {
       final updated = await _api.moveTask(id, newStatus);
@@ -555,6 +689,9 @@ class TaskRepository extends ChangeNotifier {
       notifyListeners();
       await _saveToLocalCache();
     }
+
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
 
     try {
       final updated = await _api.updateTask(
@@ -603,6 +740,9 @@ class TaskRepository extends ChangeNotifier {
       await _saveToLocalCache();
     }
 
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
+
     try {
       await _api.deleteTask(id);
     } catch (_) {
@@ -635,6 +775,9 @@ class TaskRepository extends ChangeNotifier {
     notifyListeners();
     await _saveToLocalCache();
 
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
+
     try {
       await _api.reorderTasks(updates);
     } catch (_) {
@@ -660,6 +803,9 @@ class TaskRepository extends ChangeNotifier {
       await _saveToLocalCache();
       break;
     }
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
+
     try {
       await _api.updateSubtask(subtaskId, done: done);
     } catch (_) {
@@ -679,6 +825,10 @@ class TaskRepository extends ChangeNotifier {
     );
     _applySubtaskInsert(taskId, optimistic);
     await _saveToLocalCache();
+
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return optimistic;
+
     try {
       final created = await _api.createSubtask(taskId, title.trim());
       _replaceSubtask(taskId, tempId, created);
@@ -740,6 +890,9 @@ class TaskRepository extends ChangeNotifier {
   /// Add a progress note to a task's timeline. Returns the stored event,
   /// or null when it was queued offline.
   Future<TaskEvent?> addTaskNote(String taskId, String body) async {
+    // Guest mode: notes are local-only.
+    if (_guestMode) return null;
+
     try {
       return await _api.addNote(taskId, body);
     } catch (_) {
@@ -754,6 +907,7 @@ class TaskRepository extends ChangeNotifier {
   /// last-known copy held in the task cache.
   Future<List<Subtask>> subtasksFor(String taskId) async {
     final cached = _taskById(taskId)?.subtasks ?? const <Subtask>[];
+    if (_guestMode) return cached;
     try {
       final fresh = await _api.fetchSubtasks(taskId);
       _setSubtasks(taskId, fresh);
@@ -767,6 +921,7 @@ class TaskRepository extends ChangeNotifier {
 
   /// Task timeline: fresh when reachable, else the last-seen copy.
   Future<List<TaskEvent>> taskEvents(String taskId) async {
+    if (_guestMode) return _eventsCache[taskId] ?? const [];
     try {
       final fresh = await _api.fetchTaskEvents(taskId);
       _eventsCache[taskId] = fresh;
@@ -780,6 +935,7 @@ class TaskRepository extends ChangeNotifier {
 
   /// Focus history: fresh when reachable, else the last-seen copy.
   Future<FocusHistory> taskFocus(String taskId) async {
+    if (_guestMode) return _focusCache[taskId] ?? const FocusHistory();
     try {
       final fresh = await _api.fetchTaskFocus(taskId);
       _focusCache[taskId] = fresh;

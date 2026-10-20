@@ -21,6 +21,7 @@ class _OfflineApi extends BloomApi {
     String recurring = 'none',
     DateTime? dueAt,
     String? clientId,
+    String cadence = 'once',
   }) async {
     throw Exception('offline');
   }

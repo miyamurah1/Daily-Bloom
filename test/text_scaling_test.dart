@@ -1,6 +1,6 @@
-// Text-scaling audit: the app caps system scale at 1.3x (see main.dart),
-// so 1.3 is the worst case the layout must survive. Every primary surface
-// must lay out with zero overflow at that scale.
+// Text-scaling audit: the app supports system scale up to 200% (see
+// main.dart), so 2.0 is the worst case the layout must survive. Every
+// primary surface must lay out with zero overflow at that scale.
 import 'package:daily_bloom/data/mock_data.dart';
 import 'package:daily_bloom/screens/app_shell.dart';
 import 'package:daily_bloom/screens/goals_screen.dart';
@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _scale = TextScaler.linear(1.3);
+const _scale = TextScaler.linear(2.0);
 
 Future<void> _pump(WidgetTester tester, double width, Widget child) async {
   tester.view.physicalSize = Size(width, 1400);
@@ -38,17 +38,17 @@ void main() {
     SakuraTheme.useGoogleFonts = false;
   });
 
-  testWidgets('Home survives 1.3x text scale', (tester) async {
+  testWidgets('Home survives 2.0x text scale', (tester) async {
     await _pump(tester, 360, const HomeScreen());
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('AppShell survives 1.3x text scale', (tester) async {
+  testWidgets('AppShell survives 2.0x text scale', (tester) async {
     await _pump(tester, 390, const AppShell());
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('insights screen survives 1.3x text scale', (tester) async {
+  testWidgets('insights screen survives 2.0x text scale', (tester) async {
     await _pump(tester, 390, const InsightsScreen(embedded: true));
     expect(tester.takeException(), isNull);
   });
@@ -57,13 +57,13 @@ void main() {
     'Habits': const HabitsScreen(),
     'Goals': const GoalsScreen(),
   }.entries) {
-    testWidgets('${entry.key} survives 1.3x text scale', (tester) async {
+    testWidgets('${entry.key} survives 2.0x text scale', (tester) async {
       await _pump(tester, 390, entry.value);
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('TaskCard survives 1.3x text scale', (tester) async {
+  testWidgets('TaskCard survives 2.0x text scale', (tester) async {
     const task = Task(
       id: 'ts1',
       title: 'A deliberately long task title that would wrap several lines',

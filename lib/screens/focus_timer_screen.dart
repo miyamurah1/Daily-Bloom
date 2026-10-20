@@ -14,12 +14,14 @@ import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 
-/// Full-screen digital timer — black stage, orange seven-seg style digits,
-/// − / + / fullscreen icons top-right, green Set Timer button.
+/// Full-screen focus timer — black stage, big digits, task name, pause/finish.
 ///
-/// Source of truth stays [FocusController] (lib/data/focus_controller.dart:24);
-/// this screen is a view over it: idle shows the preset, running shows the
-/// live countdown. Tapping anywhere appropriate never duplicates server rows.
+/// When a session is running the screen locks into immersive mode: status bar
+/// and navigation bar hide, no subtask chips, no ambient toggle, no quote
+/// carousel — just the task, the countdown, and a Finish button. When idle it
+/// shows the preset picker and optional task link.
+///
+/// Source of truth stays [FocusController]; this screen is a view over it.
 class FocusTimerScreen extends StatefulWidget {
   final Task? task;
 
@@ -53,6 +55,9 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
     return null;
   }
 
+  /// Whether a focus session is currently running.
+  bool get _isRunning => FocusController.instance.active;
+
   /// Tap the zen line → a fresh API quote. Guarded against overlap;
   /// offline simply falls back to a local line.
   bool _quoteBusy = false;
@@ -68,19 +73,29 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
     });
   }
 
-  static String _shortSub(String s) =>
-      s.length <= 28 ? s : '${s.substring(0, 27)}…';
-
   @override
   void initState() {
     super.initState();
-    // One quote per day per mode — stable all day, fresh tomorrow.
     _quote = focusQuoteFor(DateTime.now(), _mode);
     _loadContext();
     AmbientSound.load().then((_) {
       if (mounted) setState(() => _ambientOn = AmbientSound.enabled);
     });
+    // Auto-immersive when a session is already running (resume from
+    // mini-player / notification tap).
+    if (_isRunning) _enterImmersive();
   }
+
+  /// Enter immersive full-screen: hide status + navigation bars.
+  void _enterImmersive() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (!mounted) return;
+    setState(() => _immersive = true);
+  }
+
+  /// Trim a subtask title for the one-line "ON …" caption.
+  String _shortSub(String s) =>
+      s.length <= 28 ? s : '${s.substring(0, 27)}…';
 
   Future<void> _toggleAmbient() async {
     final next = !_ambientOn;
@@ -647,12 +662,16 @@ class _FocusTimerScreenState extends State<FocusTimerScreen> {
                               color: Colors.white24,
                             ),
                             const SizedBox(width: 4),
-                            const Text(
-                              'tap for another line',
-                              style: TextStyle(
-                                color: Colors.white24,
-                                fontSize: 10,
-                                letterSpacing: 1.6,
+                            const Flexible(
+                              child: Text(
+                                'tap for another line',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white24,
+                                  fontSize: 10,
+                                  letterSpacing: 1.6,
+                                ),
                               ),
                             ),
                           ],

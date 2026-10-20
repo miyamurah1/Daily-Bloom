@@ -756,12 +756,16 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                       color: SakuraColors.primary,
                                     ),
                                     const SizedBox(width: 5),
-                                    Text(
-                                      _task.folder,
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: SakuraColors.ink,
+                                    Flexible(
+                                      child: Text(
+                                        _task.folder,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: SakuraColors.ink,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -911,14 +915,18 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                           : SakuraColors.inkFaint,
                                     ),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      _task.dueAt == null
-                                          ? 'No due date — tap to set'
-                                          : 'Due ${DateFormat('EEE, MMM d').format(_task.dueAt!.toLocal())}${_task.dueAt!.hour != 0 || _task.dueAt!.minute != 0 ? ' · ${DateFormat('HH:mm').format(_task.dueAt!.toLocal())}' : ''}',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: SakuraColors.inkSoft,
+                                    Flexible(
+                                      child: Text(
+                                        _task.dueAt == null
+                                            ? 'No due date — tap to set'
+                                            : 'Due ${DateFormat('EEE, MMM d').format(_task.dueAt!.toLocal())}${_task.dueAt!.hour != 0 || _task.dueAt!.minute != 0 ? ' · ${DateFormat('HH:mm').format(_task.dueAt!.toLocal())}' : ''}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: SakuraColors.inkSoft,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -985,7 +993,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           builder: (context, _) {
                             final level = EnergyStore.instance
                                 .levelFor(_task.id);
-                            return Row(
+                            return Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 10,
+                              runSpacing: 8,
                               children: [
                                 Text(
                                   'ENERGY',
@@ -996,7 +1007,6 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                     color: SakuraColors.inkFaint,
                                   ),
                                 ),
-                                const SizedBox(width: 10),
                                 for (final l in const [
                                   EnergyStore.low,
                                   EnergyStore.medium,
@@ -1152,13 +1162,17 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            Text(
-                              'SUBTASKS',
-                              style: TextStyle(
-                                fontSize: 11,
-                                letterSpacing: 2.2,
-                                fontWeight: FontWeight.w600,
-                                color: SakuraColors.inkFaint,
+                            Flexible(
+                              child: Text(
+                                'SUBTASKS',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  letterSpacing: 2.2,
+                                  fontWeight: FontWeight.w600,
+                                  color: SakuraColors.inkFaint,
+                                ),
                               ),
                             ),
                             const Spacer(),
@@ -1171,27 +1185,33 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: _breaking ? null : _breakdown,
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.sparkles,
-                                    size: 12,
-                                    color: SakuraColors.primary,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _breaking ? 'Thinking…' : 'Break down',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: _breaking ? null : _breakdown,
+                                behavior: HitTestBehavior.opaque,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.sparkles,
+                                      size: 12,
                                       color: SakuraColors.primary,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        _breaking ? 'Thinking…' : 'Break down',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: SakuraColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],

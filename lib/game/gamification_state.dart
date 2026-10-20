@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -10,14 +10,14 @@ import 'bloom_engine.dart';
 /// Single source of truth for Mindful Gamification.
 ///
 /// Holds XP, tokens, streak, rank, and the Flow Combo timer. Pair with
-/// `ListenableBuilder` (the app's existing pattern) — no Riverpod needed.
+/// `ListenableBuilder` (the app's existing pattern) â€” no Riverpod needed.
 ///
 /// ```dart
 /// final game = GamificationStateNotifier();
 /// await game.load();
 /// ListenableBuilder(
 ///   listenable: game,
-///   builder: (c, _) => Text('Lv ${game.level} · ${game.tokens}◆'),
+///   builder: (c, _) => Text('Lv ${game.level} Â· ${game.tokens}â—†'),
 /// );
 /// game.registerTaskCompletion(); // +XP, advances combo
 /// ```
@@ -26,6 +26,8 @@ class GamificationStateNotifier extends ChangeNotifier {
   static const _kTokens = 'bloom_game_tokens';
   static const _kStreak = 'bloom_game_streak';
   static const _kLastDay = 'bloom_game_last_day';
+  static const _kGraceMonth = 'bloom_game_grace_month';
+  static const _kGraceUsed = 'bloom_game_grace_used';
   static const _kDoneDay = 'bloom_game_done_day';
   static const _kDoneCount = 'bloom_game_done_count';
   static const _kNudgedDay = 'bloom_game_nudged_day';
@@ -40,7 +42,7 @@ class GamificationStateNotifier extends ChangeNotifier {
     'bloom_game_wilt_streak',
   ];
 
-  /// App-wide singleton — screens share one combo / XP / streak.
+  /// App-wide singleton â€” screens share one combo / XP / streak.
   static final GamificationStateNotifier instance =
       GamificationStateNotifier();
 
@@ -48,6 +50,8 @@ class GamificationStateNotifier extends ChangeNotifier {
   int _tokens = 0;
   int _streak = 0;
   String? _lastDayIso;
+  String? _graceMonth; // "YYYY-MM" of the month the grace day was used
+  bool _graceUsed = false;
 
   /// Completions today (for the after-3rd review nudge) + the day the
   /// nudge last fired, so it suggests once, never nags.
@@ -66,15 +70,18 @@ class GamificationStateNotifier extends ChangeNotifier {
   String? _lastGainTaskId;
   int? _lastGain;
 
-  final Random _random;
-
-  GamificationStateNotifier({Random? random}) : _random = random ?? Random();
+  GamificationStateNotifier({Random? random});
 
   // --- Reads (cheap getters, safe to call in build) ---
 
   int get totalXp => _totalXp;
   int get tokens => _tokens;
   int get streak => _streak;
+  bool get graceDayAvailable {
+    final month = _dayKey(DateTime.now()).substring(0, 7);
+    if (_graceMonth != month) return true;
+    return !_graceUsed;
+  }
 
   /// Wired in main(): lets the daily-reminder copy follow the live streak
   /// without the game layer importing notifications (no import cycles).
@@ -120,7 +127,7 @@ class GamificationStateNotifier extends ChangeNotifier {
   /// Call when a task is completed. Returns the XP granted (incl. bonus).
   /// Chains completions inside [BloomEngine.comboWindow] into a combo.
   /// Pass the task id so a later undo can revoke exactly what was granted
-  /// (anti-farm: done → undo → done must not mint XP).
+  /// (anti-farm: done â†’ undo â†’ done must not mint XP).
   int registerTaskCompletion(
       {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
     final now = DateTime.now();
@@ -151,8 +158,8 @@ class GamificationStateNotifier extends ChangeNotifier {
   }
 
   /// Call when a completed task is reopened (undone). Revokes the XP its
-  /// completion granted — the exact last gain when it was this task's,
-  /// otherwise the base amount — breaks the combo chain and walks back
+  /// completion granted â€” the exact last gain when it was this task's,
+  /// otherwise the base amount â€” breaks the combo chain and walks back
   /// today's completion count. Total XP floors at zero: levels can drop,
   /// never below nothing. Returns the XP revoked.
   int revokeTaskCompletion(
@@ -180,21 +187,21 @@ class GamificationStateNotifier extends ChangeNotifier {
     return revoke;
   }
 
-  /// Daily ritual → variable token drop (70/25/5). Adds tokens, returns roll.
+  /// Daily ritual \u2192 fixed meaningful reward. No loot box: rewards
+  /// completing your focus, not volume. Adds tokens, returns roll.
   MysteryReward claimDailyRitual() {
-    final reward = BloomEngine.rollMysteryBloom(_random);
+    const reward = MysteryReward(25);
     _tokens += reward.tokens;
     _persist();
     notifyListeners();
     return reward;
   }
-
   /// Call once per app foreground (or after a recovery task). Handles
   /// same-day (no-op), next-day (+1), and broken streak (reset to 1).
   ///
   /// Milestones feel like milestones: 7/30/100-day streaks fire the
   /// celebration fanfare (heavy impact); an ordinary next-day tick fires
-  /// the confirm tick. Same-day no-ops and broken resets stay silent —
+  /// the confirm tick. Same-day no-ops and broken resets stay silent â€”
   /// haptics reward progress, never punish a miss. Pass [quiet] at boot:
   /// browsers block vibration before the first user gesture and log an
   /// intervention, so the startup tick stays silent.
@@ -217,6 +224,12 @@ class GamificationStateNotifier extends ChangeNotifier {
         if (gap == 1) {
           _streak += 1;
           grown = true;
+        } else if (gap == 2 && !_graceUsedThisMonth(day)) {
+          // Grace Day: one missed day per month doesn't break the streak.
+          _streak += 1;
+          grown = true;
+          _graceMonth = day.substring(0, 7);
+          _graceUsed = true;
         } else {
           _streak = 1;
         }
@@ -263,7 +276,7 @@ class GamificationStateNotifier extends ChangeNotifier {
 
   /// Demo helper: max the profile to Full Bloom so the whole app can be
   /// seen at Lv 100 (Sakura, 5/5 season, live x5 combo, petals on).
-  /// No server writes — local game juice only.
+  /// No server writes â€” local game juice only.
   void debugFullBloom() {
     _totalXp = BloomEngine.totalXpForLevel(BloomEngine.maxLevel);
     _tokens += 2500;
@@ -328,11 +341,13 @@ class GamificationStateNotifier extends ChangeNotifier {
       _tokens = prefs.getInt(_kTokens) ?? 0;
       _streak = prefs.getInt(_kStreak) ?? 0;
       _lastDayIso = prefs.getString(_kLastDay);
+      _graceMonth = prefs.getString(_kGraceMonth);
+      _graceUsed = prefs.getBool(_kGraceUsed) ?? false;
       _doneDayIso = prefs.getString(_kDoneDay);
       _doneCount = prefs.getInt(_kDoneCount) ?? 0;
       _nudgedDayIso = prefs.getString(_kNudgedDay);
       // One-time purge of the removed stake/wilt keys (v1.0 punishment
-      // mechanics). Best-effort — a failing remove must not block boot.
+      // mechanics). Best-effort â€” a failing remove must not block boot.
       for (final key in _legacyStakeKeys) {
         try {
           await prefs.remove(key);
@@ -351,6 +366,8 @@ class GamificationStateNotifier extends ChangeNotifier {
       await prefs.setInt(_kTokens, _tokens);
       await prefs.setInt(_kStreak, _streak);
       if (_lastDayIso != null) await prefs.setString(_kLastDay, _lastDayIso!);
+      if (_graceMonth != null) await prefs.setString(_kGraceMonth, _graceMonth!);
+      await prefs.setBool(_kGraceUsed, _graceUsed);
       if (_doneDayIso != null) {
         await prefs.setString(_kDoneDay, _doneDayIso!);
       }
@@ -359,7 +376,7 @@ class GamificationStateNotifier extends ChangeNotifier {
         await prefs.setString(_kNudgedDay, _nudgedDayIso!);
       }
     } catch (_) {
-      // Persistence is a bonus — gameplay continues in memory.
+      // Persistence is a bonus â€” gameplay continues in memory.
     }
   }
 
@@ -372,7 +389,7 @@ class GamificationStateNotifier extends ChangeNotifier {
       _comboCount = 0;
       return;
     }
-    // Cap the OS timer at 15 min — exact, one shot, cheap.
+    // Cap the OS timer at 15 min â€” exact, one shot, cheap.
     _comboTimer = Timer(wait, () {
       _comboCount = 0;
       _comboExpiresAt = null;
@@ -382,6 +399,12 @@ class GamificationStateNotifier extends ChangeNotifier {
 
   static String _dayKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  bool _graceUsedThisMonth(String day) {
+    final month = day.substring(0, 7);
+    if (_graceMonth != month) return false;
+    return _graceUsed;
+  }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 

@@ -27,11 +27,15 @@ class _AuthGateState extends State<AuthGate> {
   /// app before onboarding.
   bool? _onboardingSeen;
 
+  /// Whether a guest session has been established (persisted locally).
+  bool? _guestMode;
+
   @override
   void initState() {
     super.initState();
     AuthStore.instance.restore();
     _loadOnboarding();
+    _loadGuestMode();
   }
 
   Future<void> _loadOnboarding() async {
@@ -48,7 +52,33 @@ class _AuthGateState extends State<AuthGate> {
     }
   }
 
-  /// Firebase's own stream is the ground truth for identity.
+  Future<void> _loadGuestMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _guestMode = prefs.getBool('bloom_guest_mode_v1') ?? false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _guestMode = false);
+    }
+  }
+
+  /// Enter as guest: persist the flag, mark onboarding seen, open the shell.
+  Future<void> _enterGuest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('bloom_guest_mode_v1', true);
+      await prefs.setBool(OnboardingScreen.seenKey, true);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _guestMode = true;
+      _onboardingSeen = true;
+    });
+  }
+
+    /// Firebase's own stream is the ground truth for identity.
   /// Falls back to logged-out when Firebase isn't initialised — that only
   /// happens in widget tests (production always runs Firebase.initializeApp
   /// in main() first), so this never masks a real failure.
@@ -72,30 +102,45 @@ class _AuthGateState extends State<AuthGate> {
 
         final firebaseUser = snapshot.data;
 
-        // No Firebase session → show login.
-        if (firebaseUser == null) {
-          return const LoginScreen();
+        // ---------- Signed in ----------
+        if (firebaseUser != null) {
+          return ListenableBuilder(
+            listenable: AuthStore.instance,
+            builder: (context, _) {
+              final auth = AuthStore.instance;
+              if (!auth.isReady) return _splash();
+              if (!auth.isLoggedIn) return const LoginScreen();
+              // First run: onboard before the shell.
+              if (_onboardingSeen == null) return _splash();
+              if (!_onboardingSeen!) {
+                return OnboardingScreen(
+                  onDone: () => setState(() => _onboardingSeen = true),
+                );
+              }
+              return const AppShell();
+            },
+          );
         }
 
-        // Firebase user exists → wait for DB profile sync via AuthStore.
-        return ListenableBuilder(
-          listenable: AuthStore.instance,
-          builder: (context, _) {
-            final auth = AuthStore.instance;
-            if (!auth.isReady) return _splash();
-            if (!auth.isLoggedIn) return const LoginScreen();
-            // First run: onboard before the shell.
-            if (_onboardingSeen == null) return _splash();
-            if (!_onboardingSeen!) {
-              return OnboardingScreen(
-                onDone: () => setState(() => _onboardingSeen = true),
-              );
-            }
-            return const AppShell();
-          },
+        // ---------- Not signed in ----------
+        // Already a guest → go straight to the shell.
+        if (_guestMode == true) {
+          return const AppShell(guest: true);
+        }
+
+        // First-time or returning non-guest: show the welcome gate so the
+        // user sees value before being asked for credentials.
+        return WelcomeGate(
+          onGuest: _enterGuest,
+          onSignIn: onSignIn,
         );
       },
     );
+  }
+
+  void onSignIn() {
+    // No-op trigger: the StreamBuilder will detect the new Firebase user
+    // once sign-in completes on LoginScreen and route to AppShell.
   }
 
   /// Themed splash: resolves through the active Sakura theme so cold
@@ -116,12 +161,142 @@ class _AuthGateState extends State<AuthGate> {
                 color: SakuraColors.primary,
               ),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'COMPLETE TASKS · SEE PROOF · GROW',
+              style: TextStyle(
+                fontSize: 10,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w700,
+                color: SakuraColors.inkFaint,
+              ),
+            ),
             const SizedBox(height: 16),
             CircularProgressIndicator(
               strokeWidth: 2,
               color: SakuraColors.primary,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Welcome screen shown before any credential is requested.
+///
+/// Presents the core value ("one task, one timer, one focus") and lets the
+/// user continue as guest or sign in. Signing in simply closes this screen;
+/// the StreamBuilder above detects the new Firebase user and routes to AppShell.
+class WelcomeGate extends StatelessWidget {
+  final VoidCallback onGuest;
+  final VoidCallback onSignIn;
+
+  const WelcomeGate({
+    super.key,
+    required this.onGuest,
+    required this.onSignIn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: SakuraColors.background,
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 40),
+              Text(
+                '日常',
+                style: SakuraTheme.display(
+                  fontSize: 40,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 5,
+                  color: SakuraColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Daily Bloom',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: SakuraColors.ink,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'One task. One timer. One focus.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: SakuraColors.inkSoft,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Start without an account. Add up to 3 tasks as a guest — '
+                'create a free account anytime to sync across devices.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: SakuraColors.inkFaint,
+                ),
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: FilledButton.icon(
+                    onPressed: onGuest,
+                    icon: const Icon(Icons.person_outline, size: 18),
+                    label: const Text(
+                      'Continue as Guest',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: SakuraColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: OutlinedButton.icon(
+                    onPressed: onSignIn,
+                    icon: const Icon(Icons.login, size: 18),
+                    label: const Text(
+                      'Sign In',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: SakuraColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      side: BorderSide(color: SakuraColors.primary),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

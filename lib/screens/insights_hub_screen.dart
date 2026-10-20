@@ -9,7 +9,6 @@ import '../widgets/tab_skeleton.dart';
 import 'inbox_screen.dart';
 import 'insights_screen.dart';
 import 'review_screen.dart';
-import 'rules_screen.dart';
 
 /// Insights tab hub — Analytics + Review + Inbox + Rules under one
 /// bottom-nav slot. A compact pill row switches sections; only visited
@@ -24,25 +23,15 @@ class InsightsHubScreen extends StatefulWidget {
 }
 
 class _InsightsHubScreenState extends State<InsightsHubScreen> {
-  static const _allLabels = ['Insights', 'Review', 'Inbox', 'Rules'];
-  static const _allIcons = [
+  static const _labels = ['Insights', 'Review', 'Inbox'];
+  static const _icons = [
     LucideIcons.barChart3,
     LucideIcons.sparkles,
     LucideIcons.inbox,
-    LucideIcons.workflow,
   ];
 
   int _index = 0;
   final Set<int> _visited = {0};
-
-  /// Simple mode drops the Rules power tool; the hub keeps three doors.
-  List<String> get _labels => SimpleMode.instance.enabled
-      ? _allLabels
-      : _allLabels.sublist(0, _allLabels.length - 1);
-
-  List<IconData> get _icons => SimpleMode.instance.enabled
-      ? _allIcons
-      : _allIcons.sublist(0, _allIcons.length - 1);
 
   /// Unread inbox notifications → a small red dot on the Inbox segment.
   /// Shared state: [InboxStore] is published by the Inbox screen itself,
@@ -105,7 +94,7 @@ class _InsightsHubScreenState extends State<InsightsHubScreen> {
         break;
       default:
         // ignore: prefer_const_constructors
-        page = RulesScreen();
+        page = InsightsScreen(embedded: true);
         break;
     }
     return TickerMode(enabled: i == _index, child: page);

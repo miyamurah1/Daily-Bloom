@@ -4,6 +4,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/profile_name.dart';
+import '../data/simple_mode.dart';
 import '../game/gamification_state.dart';
 import '../screens/search_screen.dart';
 import '../theme/sakura_theme.dart';
@@ -60,6 +61,10 @@ class DailyBloomAppBar extends StatelessWidget
                     children: [
                       Text(
                         '日常',
+                        // Decorative wordmark: keep its optical size stable
+                        // at large system text scales (the functional labels
+                        // below still scale).
+                        textScaler: TextScaler.noScaling,
                         style: SakuraTheme.display(
                           fontSize: 30,
                           height: 1.0,
@@ -133,48 +138,48 @@ class DailyBloomAppBar extends StatelessWidget
                     ),
                   ),
                 ),
-                SizedBox(width: narrow ? 6 : 8),
-                // Token pill listens here (not in Home's root listener):
-                // an XP/token tick repaints this 40px pill only — never
-                // the whole scaffold body (heatmap, board, cards).
-                _TokenPill(compact: narrow),
-                SizedBox(width: narrow ? 6 : 8),
-                narrow
-                    ? GestureDetector(
-                        onTap: onStoreTap,
-                        child: Container(
-                          margin: const EdgeInsets.only(top: 6),
-                          padding: EdgeInsets.all(narrow ? 5 : 7),
-                          decoration: BoxDecoration(
-                            color: SakuraColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: SakuraColors.cardBorder),
+                // The theme shop is an Advanced surface: hidden in Simple
+                // Mode, still one toggle away in Settings.
+                if (!SimpleMode.instance.enabled) ...[
+                  SizedBox(width: narrow ? 6 : 8),
+                  narrow
+                      ? GestureDetector(
+                          onTap: onStoreTap,
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: EdgeInsets.all(narrow ? 5 : 7),
+                            decoration: BoxDecoration(
+                              color: SakuraColors.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border:
+                                  Border.all(color: SakuraColors.cardBorder),
+                            ),
+                            child: Tooltip(
+                              message: 'Open store',
+                              child: Icon(LucideIcons.store,
+                                  size: 14, color: SakuraColors.inkSoft),
+                            ),
                           ),
-                          child: Tooltip(
-                            message: 'Open store',
-                            child: Icon(LucideIcons.store,
-                                size: 14,
-                                color: SakuraColors.inkSoft),
-                          ),
-                        ),
-                      )
-                    : GestureDetector(
-                        onTap: onStoreTap,
-                        child: _Pill(
-                          child: Text(
-                            'STORE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 1.6,
-                              fontWeight: FontWeight.w700,
-                              color: SakuraColors.inkSoft,
+                        )
+                      : GestureDetector(
+                          onTap: onStoreTap,
+                          child: _Pill(
+                            child: Text(
+                              'STORE',
+                              style: TextStyle(
+                                fontSize: 11,
+                                letterSpacing: 1.6,
+                                fontWeight: FontWeight.w700,
+                                color: SakuraColors.inkSoft,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                ],
+                const SizedBox(width: 6),
+                const _TokenPill(),
                 if (onLogoutTap != null) ...[
-                  SizedBox(width: narrow ? 6 : 8),
+                  const SizedBox(width: 6),
                   GestureDetector(
                     onTap: onLogoutTap,
                     child: Container(
@@ -227,9 +232,8 @@ class DailyBloomAppBar extends StatelessWidget
 class _Pill extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
-  final bool compact;
 
-  const _Pill({required this.child, this.onTap, this.compact = false});
+  const _Pill({required this.child, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -238,8 +242,8 @@ class _Pill extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.only(top: 6),
-        padding: EdgeInsets.symmetric(
-            horizontal: compact ? 8 : 12, vertical: compact ? 6 : 7),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: SakuraColors.surface,
           borderRadius: BorderRadius.circular(20),
@@ -255,8 +259,7 @@ class _Pill extends StatelessWidget {
 /// been opened once, a 6px dot says "tap me". Persisted, so it never
 /// nags twice. Defaults to seen (no dot flash before prefs load).
 class _TokenPill extends StatefulWidget {
-  final bool compact;
-  const _TokenPill({this.compact = false});
+  const _TokenPill();
 
   static const seenKey = 'bloom_currency_seen_v1';
 
@@ -303,7 +306,6 @@ class _TokenPillState extends State<_TokenPill> {
         label:
             '${GamificationStateNotifier.instance.tokens} tokens. Show what coins mean.',
         child: _Pill(
-          compact: widget.compact,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

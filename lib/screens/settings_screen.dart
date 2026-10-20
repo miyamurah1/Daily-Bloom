@@ -21,10 +21,12 @@ import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../game/game.dart';
 
+import '../screens/rules_screen.dart';
 import '../theme/sakura_theme.dart';
 
 
 import '../widgets/bloom_dialog.dart';
+import '../widgets/motion.dart';
 import '../widgets/profile_editor.dart';
 
 String _taskIdentityKey(Task t) =>
@@ -1393,6 +1395,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeThumbColor: SakuraColors.primary,
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Rules & automations — moved out of the Insights hub so it no
+          // longer fights for space with analytics/review/inbox.
+          GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              SakuraPageRoute(builder: (_) => const RulesScreen()),
+            ),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: SakuraTheme.cardDecoration(),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: SakuraColors.primary.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(LucideIcons.workflow,
+                        size: 15, color: SakuraColors.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Rules & automations',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Automate task flows, reminders and reviews.',
+                          style: TextStyle(
+                              fontSize: 12, color: SakuraColors.inkSoft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(LucideIcons.chevronRight,
+                      size: 16, color: SakuraColors.inkFaint),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 14),

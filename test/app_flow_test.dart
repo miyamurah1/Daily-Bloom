@@ -55,7 +55,7 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Navigate the four tabs, verifying each renders without error.
-    for (final label in ['Rituals', 'Folders', 'Insights', 'Today']) {
+    for (final label in ['Habits', 'Folders', 'Insights', 'Today']) {
       await tester.tap(find.text(label));
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));

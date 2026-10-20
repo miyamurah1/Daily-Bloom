@@ -12,9 +12,9 @@ void main() {
   group('daily nudge copy', () {
     test('is streak-aware', () {
       expect(ReminderService.dailyBody(0),
-          'One small task today keeps the streak alive.');
+          'Good morning. One small task today keeps the streak alive.');
       expect(ReminderService.dailyBody(7),
-          'Day 7 — your garden is waiting.');
+          'Good morning. Just 3 seeds today. Which one will you start with? (Day 7)');
     });
   });
 

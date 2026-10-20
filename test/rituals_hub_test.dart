@@ -147,7 +147,7 @@ void main() {
   testWidgets('theme swap repaints the Rituals hub section', (tester) async {
     ThemeStore.instance.resetToDefault();
     await pumpShell(tester);
-    await tapNav(tester, 'Rituals');
+    await tapNav(tester, 'Habits');
     expect(find.byType(HabitsScreen), findsOneWidget);
     expect(bgOf<HabitsScreen>(tester), AppThemes.midnight.background);
 

@@ -54,6 +54,28 @@ class WeeklyReview {
 
   bool get isEmpty =>
       doneCount == 0 && focusMinutes == 0 && habitsKept == 0;
+
+  /// One forward-looking line — meaning comes from what you carry into
+  /// next week, not from the tally. Pure so it is testable and reusable
+  /// by the share card.
+  String get carry {
+    if (isEmpty) {
+      return "Start with one small thing tomorrow — that's a week.";
+    }
+    if (habitsTotal > 0 && habitsKept < habitsTotal) {
+      final gap = habitsTotal - habitsKept;
+      return 'Carry one ritual next week: close the gap on '
+          '$gap habit${gap == 1 ? '' : 's'}.';
+    }
+    if (topTag != null && topTag!.isNotEmpty) {
+      return 'Protect one block for $topTag next week.';
+    }
+    if (streakCurrent > 0) {
+      return 'Keep the $streakCurrent-day streak alive with one small '
+          'win tomorrow.';
+    }
+    return 'Next week, finish one thing before noon.';
+  }
 }
 
 const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
