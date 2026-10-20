@@ -17,10 +17,10 @@ import '../data/weekly_review.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/share_card.dart';
 
-/// Weekly review: Monâ€“Sun numbers with one honest verdict.
+/// Weekly review: Mon–Sun numbers with one honest verdict.
 ///
 /// Built client-side from the same endpoints as History + Insights
-/// (done tasks, `/api/insights`, local habit logs) â€” no new API.
+/// (done tasks, `/api/insights`, local habit logs) — no new API.
 /// Offline shows an honest empty card, never last week's numbers as
 /// if they were fresh.
 class ReviewScreen extends StatefulWidget {
@@ -138,7 +138,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'é€±',
+              '週',
               style: TextStyle(
                 fontSize: 22,
                 height: 1.0,
@@ -148,7 +148,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
             ),
             Text(
-              'WEEKLY REVIEW Â· ${reviewWeekLabel().toUpperCase()}',
+              'WEEKLY REVIEW · ${reviewWeekLabel().toUpperCase()}',
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 3.2,
@@ -351,11 +351,11 @@ class _StandoutsCard extends StatelessWidget {
     final rows = <Widget>[];
     if (data.bestDay != null && data.bestDayCount >= 2) {
       rows.add(_row(LucideIcons.flame, 'Best day',
-          '${data.bestDay} Â· ${data.bestDayCount} done'));
+          '${data.bestDay} · ${data.bestDayCount} done'));
     }
     if (data.topTag != null) {
       rows.add(_row(LucideIcons.tag, 'Top tag',
-          '${data.topTag} Â· ${(100 * data.topTagRate).round()}%'));
+          '${data.topTag} · ${(100 * data.topTagRate).round()}%'));
     }
     if (data.habitsTotal > 0) {
       rows.add(_row(
@@ -436,10 +436,10 @@ class _StreakCard extends StatelessWidget {
           Expanded(
             child: Text(
               data.streakCurrent > 0
-                  ? '${data.streakCurrent}-day streak Â· best ${data.streakBest} (30d)'
+                  ? '${data.streakCurrent}-day streak · best ${data.streakBest} (30d)'
                   : data.streakBest > 1
-                      ? 'Streak paused Â· best ${data.streakBest} (30d)'
-                      : 'No streak yet â€” today is day one.',
+                      ? 'Streak paused · best ${data.streakBest} (30d)'
+                      : 'No streak yet — today is day one.',
               style: TextStyle(
                 fontSize: 13.5,
                 height: 1.5,
@@ -519,7 +519,7 @@ class _OfflineCard extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                   color: SakuraColors.ink)),
           const SizedBox(height: 6),
-          Text('Connect to review your week â€” numbers stay on the server.',
+          Text('Connect to review your week — numbers stay on the server.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 12.5, height: 1.55, color: SakuraColors.inkSoft)),
@@ -538,7 +538,7 @@ String shareTextFor(WeeklyReview r) {
     '${r.activeDays} active days',
   ];
   var out =
-      'My week in bloom (${reviewWeekLabel(r.weekStart)}): ${bits.join(' Â· ')}.';
+      'My week in bloom (${reviewWeekLabel(r.weekStart)}): ${bits.join(' · ')}.';
   if (r.streakCurrent > 0) out += ' ${r.streakCurrent}-day streak.';
   return out;
 }
@@ -592,7 +592,7 @@ class _SharePreviewState extends State<_SharePreview> {
       await Clipboard.setData(
           ClipboardData(text: shareTextFor(widget.data)));
     } catch (_) {
-      // Clipboard unavailable (some test harnesses) â€” nothing to do.
+      // Clipboard unavailable (some test harnesses) — nothing to do.
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -634,7 +634,7 @@ class _SharePreviewState extends State<_SharePreview> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(LucideIcons.share2, size: 16),
-              label: Text(_busy ? 'Preparingâ€¦' : 'Share image',
+              label: Text(_busy ? 'Preparing…' : 'Share image',
                   style:
                       const TextStyle(fontWeight: FontWeight.w700)),
             ),

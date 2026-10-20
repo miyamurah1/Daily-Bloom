@@ -33,10 +33,10 @@ class TaskCard extends StatefulWidget {
   /// hosting list (it has the repository + context); null disables it.
   final VoidCallback? onLongPress;
 
-  /// Shared-element tag for the timer chip â†’ [FocusTimerScreen] flight.
+  /// Shared-element tag for the timer chip → [FocusTimerScreen] flight.
   /// Null disables the Hero (search rows, chipless cards). When set, the
-  /// pushing screen must pass the identical tag to the timer screen â€”
-  /// tags embed a per-screen prefix (`home-focus-â€¦`) so the same task
+  /// pushing screen must pass the identical tag to the timer screen —
+  /// tags embed a per-screen prefix (`home-focus-…`) so the same task
   /// rendered on two kept-alive tabs can never collide.
   final String? heroTag;
 
@@ -64,7 +64,7 @@ class _TaskCardState extends State<TaskCard> {
   /// its own dedicated ring so the two targets never compete.
   void _openTask() => widget.onOpen?.call();
 
-  /// Free-form subtask toggle â€” no confirm dialog and no lock-in.
+  /// Free-form subtask toggle — no confirm dialog and no lock-in.
   /// Completed -> a petal flourish + double-pulse (the [PetalBurst]
   /// wrapping the row owns those) plus a 3s UNDO snackbar. UNDO calls the
   /// parent handler directly so it never stacks a second snackbar.
@@ -77,7 +77,7 @@ class _TaskCardState extends State<TaskCard> {
     messenger
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
-        content: Text(next ? 'Subtask done ðŸŒ¸' : 'Subtask reopened'),
+        content: Text(next ? 'Subtask done 🌸' : 'Subtask reopened'),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: 'UNDO',
@@ -231,7 +231,7 @@ class _TaskCardState extends State<TaskCard> {
               const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  // Title / description block owns "open" â€” ring, subtasks
+                  // Title / description block owns "open" — ring, subtasks
                   // and timer chip are siblings with their own detectors.
                   onTap: widget.onOpen == null ? null : _openTask,
                   behavior: HitTestBehavior.opaque,
@@ -299,7 +299,7 @@ class _TaskCardState extends State<TaskCard> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            '${overdue ? 'Overdue Â· ' : 'Due '}${DateFormat('MMM d').format(widget.task.dueAt!.toLocal())}',
+                            '${overdue ? 'Overdue · ' : 'Due '}${DateFormat('MMM d').format(widget.task.dueAt!.toLocal())}',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -496,7 +496,7 @@ class _TaskCardState extends State<TaskCard> {
 
   /// Timer chip beside the card: total focused time as HH:MM (your
   /// sketch's "05:50"), live orange countdown while a session runs.
-  /// Tap â†’ full timer screen.
+  /// Tap → full timer screen.
   Widget _timerChip() {
     return ListenableBuilder(
       // Structural only (session started/finished on some task). The

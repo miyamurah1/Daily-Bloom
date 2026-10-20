@@ -15,7 +15,7 @@ import 'bloom_snackbar.dart';
 /// Modal bottom sheet behind the shell FAB: type a title, pick a folder
 /// and tag, and plant immediately into [TaskRepository] (optimistic +
 /// locally persisted, so it works offline too). [initialText] prefills
-/// the title â€” the share-sheet entry point.
+/// the title — the share-sheet entry point.
 Future<void> showQuickAddTask(BuildContext context, {String? initialText}) {
   return showModalBottomSheet<void>(
     context: context,
@@ -219,7 +219,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     }
     if (!available || !mounted) {
       if (mounted) {
-        showBloomSnackBar(context, 'Voice not available here â€” type instead.');
+        showBloomSnackBar(context, 'Voice not available here — type instead.');
       }
       return;
     }
@@ -251,7 +251,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     }
   }
 
-  /// True while the post-plant ðŸŒ± flourish plays; the sheet pops when the
+  /// True while the post-plant 🌱 flourish plays; the sheet pops when the
   /// grow animation ends (ticker-driven, no bare timers).
   bool _growing = false;
   String _plantedTitle = '';
@@ -308,7 +308,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
           parsed.tag,
           if (parsed.priority == 'high') 'high priority',
           if (!parsed.fromAi) 'offline parse',
-        ].join(' Â· ');
+        ].join(' · ');
       });
       AppHaptics.tap();
     } finally {
@@ -325,7 +325,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     setState(() => _saving = true);
     AppHaptics.tap();
     // Optimistic: the repository inserts the task synchronously, so play
-    // the ðŸŒ± immediately instead of blocking on a network round-trip
+    // the 🌱 immediately instead of blocking on a network round-trip
     // (offline it would otherwise stall until the request times out).
     unawaited(TaskRepository.instance.createTask(
         title: title, folder: _folder, tag: _tag, dueAt: _dueAt, priority: _priority,
@@ -338,12 +338,12 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
     TapSound.tap();
   }
 
-  /// Called when the ðŸŒ± grow animation completes: dismiss + confirm.
+  /// Called when the 🌱 grow animation completes: dismiss + confirm.
   void _finishPlant() {
     if (!mounted) return;
     final navigator = Navigator.of(context);
     navigator.pop();
-    showBloomSnackBar(context, 'Planted "$_plantedTitle" ðŸŒ±');
+    showBloomSnackBar(context, 'Planted "$_plantedTitle" 🌱');
   }
 
   Widget _sproutFlourish() {
@@ -362,7 +362,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
         ),
         child: Semantics(
           label: 'Task planted',
-          child: const Text('ðŸŒ±', style: TextStyle(fontSize: 34)),
+          child: const Text('🌱', style: TextStyle(fontSize: 34)),
         ),
       ),
     );
@@ -486,7 +486,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _aiLoading ? 'Readingâ€¦' : 'Auto-fill with AI',
+                      _aiLoading ? 'Reading…' : 'Auto-fill with AI',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -605,7 +605,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                               )
                             : const Icon(LucideIcons.plus, size: 18),
                         label: Text(
-                          _saving ? 'Plantingâ€¦' : 'Plant bloom',
+                          _saving ? 'Planting…' : 'Plant bloom',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),

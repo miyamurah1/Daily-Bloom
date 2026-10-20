@@ -47,27 +47,27 @@ import 'settings_screen.dart';
 import 'store_screen.dart';
 import 'task_detail_screen.dart';
 
-/// Home tab â€” clean, performant routing hub.
+/// Home tab — clean, performant routing hub.
 ///
 /// Data layer (Postgres via [BloomApi] with mock fallback) lives here;
 /// all section UI is delegated to modular widgets. Top-to-bottom order:
 ///
-/// - Bento header â€” [DailyIntentionCard] (compact) + [GameHud]
+/// - Bento header — [DailyIntentionCard] (compact) + [GameHud]
 ///   (seedling rank / XP / streak) in one band.
 /// - Planner card, then the 12-week [ContributionHeatmap] (visible,
 ///   collapsible), then [QuickLinks] doors.
-/// - [TaskFlowList] â€” Today's tasks FINAL, at the bottom: the work
+/// - [TaskFlowList] — Today's tasks FINAL, at the bottom: the work
 ///   closes the page after the proof and the doors.
 ///
 /// Habit tracking lives only in the dedicated Habits tab
-/// (`HabitsScreen`) â€” Home intentionally shows no habit UI.
+/// (`HabitsScreen`) — Home intentionally shows no habit UI.
 ///
 /// Responsive contract (breakpoint 600):
 /// - Mobile (< 600): one unified [CustomScrollView] ([SliverList] +
 ///   [SliverToBoxAdapter]) + [BottomNavigationBar] section nav.
 /// - Desktop (>= 600): same stacked flow, full viewport width.
 ///   One column everywhere means no side column can ever sit empty
-///   beside a longer one â€” the page simply ends after the last card.
+///   beside a longer one — the page simply ends after the last card.
 /// App-level tab routing stays in AppShell and is the app's ONLY nav
 /// system (the old desktop rail was removed). The inner section bar here
 /// exists solely for the standalone/test configuration; pass [embedded]
@@ -113,7 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _conceptVisible = true;
   bool _creatingSample = false;
 
-  /// True once the user has opened the arc â€” the taller intro card collapses
+  /// True once the user has opened the arc — the taller intro card collapses
   /// to the thin row afterwards (one-time, persisted).
   bool _arcSeen = false;
 
@@ -129,11 +129,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// 12-week evidence grid. Expanded by default so the proof is
   /// visible; collapsible for a shorter scroll. State survives
-  /// rebuilds (not route pops â€” visible is the product decision).
+  /// rebuilds (not route pops — visible is the product decision).
   bool _heatExpanded = true;
 
   /// Peak finishing hour from Insights (best hour to tackle #1).
-  /// Fetched on plan only â€” never blocks the plan itself.
+  /// Fetched on plan only — never blocks the plan itself.
   int? _peakHour;
 
   /// In-home section nav (Intention / Flow).
@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _flowKey = GlobalKey();
 
   /// Honest offline grid: 12 weeks of quiet days. Never anyone else's
-  /// activity â€” the live heatmap replaces this on a successful sync.
+  /// activity — the live heatmap replaces this on a successful sync.
   List<HeatDay> _zeroHeat({int weeks = 12}) {
     final today = DateTime.now();
     final total = weeks * 7;
@@ -158,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String get _streakLabel =>
-      _live && _bestStreak > 0 ? 'Best streak: $_bestStreak days' : 'Best streak: â€”';
+      _live && _bestStreak > 0 ? 'Best streak: $_bestStreak days' : 'Best streak: —';
 
   @override
   void initState() {
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
           v.isNotEmpty ? v : (AuthStore.instance.user?.displayName ?? '');
       setState(() => _userName = display);
     });
-    // Simple mode hides/shows the Board door â€” repaint on the flip.
+    // Simple mode hides/shows the Board door — repaint on the flip.
     SimpleMode.instance.addListener(_onSimpleModeChanged);
     // Share-to-app: text shared from other apps opens a prefilled
     // quick-add (cold start and warm, exactly once each).
@@ -293,8 +293,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
     ];
     await PlanWidgetBridge.pushPlan(rows);
-    // Remember the plan so any screen's completion can refresh âœ“ flags
-    // â€” completing from the detail screen, board, folders, or search.
+    // Remember the plan so any screen's completion can refresh ✓ flags
+    // — completing from the detail screen, board, folders, or search.
     PlanWidgetBridge.rememberPlan(
         rows.map((r) => (id: r.id, title: r.title, reason: r.reason)).toList());
   }
@@ -318,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// The concept map shows until dismissed once (persisted). Offline test
-  /// pumps with empty prefs, so it is visible there too â€” by design.
+  /// pumps with empty prefs, so it is visible there too — by design.
   Future<void> _loadArcSeen() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -327,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  /// True once the user has opened the arc â€” the taller intro card collapses
+  /// True once the user has opened the arc — the taller intro card collapses
   /// to the thin row afterwards (one-time, persisted).
   bool get _arcIntro => !_arcSeen;
 
@@ -357,9 +357,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _prog.isEmpty &&
       _done.isEmpty;
 
-  /// Plants three REAL starter tasks â€” a warm welcome, not a "sample".
+  /// Plants three REAL starter tasks — a warm welcome, not a "sample".
   /// Toggling any of them done runs the genuine loop (heatmap +1, XP +
-  /// combo); the user renames or deletes them afterwards â€” they convert
+  /// combo); the user renames or deletes them afterwards — they convert
   /// into their own data.
   Future<void> _createSample() async {
     if (_creatingSample || !_live) return;
@@ -375,12 +375,12 @@ class _HomeScreenState extends State<HomeScreen> {
       await _refresh();
       if (mounted) {
         showBloomSnackBar(context,
-            'Welcome blooms planted â€” tap the first one done. ðŸŒ¸');
+            'Welcome blooms planted — tap the first one done. 🌸');
       }
     } catch (e) {
       if (mounted) {
         if (e is AuthExpiredException) return;
-        showBloomSnackBar(context, 'Could not plant â€” try again.');
+        showBloomSnackBar(context, 'Could not plant — try again.');
       }
     } finally {
       if (mounted) setState(() => _creatingSample = false);
@@ -400,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
-  /// A share landed â†’ open quick-add with the text already in place.
+  /// A share landed → open quick-add with the text already in place.
   void _onSharedText() {
     final text = ShareInbox.instance.pending;
     if (text == null || !mounted) return;
@@ -515,16 +515,16 @@ class _HomeScreenState extends State<HomeScreen> {
         _done = TaskRepository.instance.doneTasks;
         if (_heat.isEmpty) _heat = _zeroHeat();
         _live = false;
-        _note = 'API offline â€” showing your saved tasks.';
+        _note = 'API offline — showing your saved tasks.';
       });
       DailyIntentionNotifier.instance.markOffline();
     }
   }
 
   Future<void> _complete(Task t) async {
-    // Local game juice first â€” works offline so combo is always visible.
+    // Local game juice first — works offline so combo is always visible.
     // XP moves only with the transition: completing grants, reopening
-    // revokes (anti-farm â€” done â†’ undo â†’ done must not mint XP).
+    // revokes (anti-farm — done → undo → done must not mint XP).
     final game = GamificationStateNotifier.instance;
     final levelBefore = game.level;
     final next = nextStatus(t);
@@ -537,30 +537,30 @@ class _HomeScreenState extends State<HomeScreen> {
       game.revokeTaskCompletion(taskId: t.id);
       AppHaptics.tap();
     }
-    // Level crossing â†’ one-shot burst + fanfare (no dialog stacks).
+    // Level crossing → one-shot burst + fanfare (no dialog stacks).
     if (game.level > levelBefore && mounted) {
       LevelUpBurst.celebrate(context, game);
     }
     // Repository move is optimistic + persisted: the board updates at
     // 0ms and survives offline. No "start the backend" dead-end.
     await TaskRepository.instance.moveTask(t.id, next);
-    _syncPlanWidget(); // widget âœ“ flags stay truthful
+    _syncPlanWidget(); // widget ✓ flags stay truthful
     if (mounted) {
       showBloomSnackBar(
           context,
           next == 'done'
-              ? 'Done â€” heatmap +1 (like git commit).'
-              : 'Back to to-do â€” start it when ready.');
+              ? 'Done — heatmap +1 (like git commit).'
+              : 'Back to to-do — start it when ready.');
     }
     // Analytics catch up only when the backend is reachable.
     if (_live) await _refresh();
-    // Third bloom of the day: behavior beats the clock â€” suggest the
+    // Third bloom of the day: behavior beats the clock — suggest the
     // review while the evidence is fresh, exactly once.
     _maybeReviewNudge();
   }
 
   /// Evening-or-milestone review invite. Fires once a day, either after
-  /// the 3rd completion or on first open past 8pm with something done â€”
+  /// the 3rd completion or on first open past 8pm with something done —
   /// never a fixed alarm, never a nag.
   void _maybeReviewNudge({bool evening = false}) {
     final game = GamificationStateNotifier.instance;
@@ -574,8 +574,8 @@ class _HomeScreenState extends State<HomeScreen> {
     showBloomSnackBar(
       context,
       evening
-          ? 'Day is done â€” see how the week looks?'
-          : '3 blooms today â€” peek at your week?',
+          ? 'Day is done — see how the week looks?'
+          : '3 blooms today — peek at your week?',
       actionLabel: 'Review',
       onAction: () {
         Navigator.of(context).push(
@@ -608,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Backlog groom: duplicates to clear, stale to defer, vague to sharpen.
   /// Server upgrades grouping (Flash-Lite); offline uses local rules.
-  /// Deletes and defers only run on explicit Apply â€” nothing auto-changes.
+  /// Deletes and defers only run on explicit Apply — nothing auto-changes.
   Future<void> _groom() async {
     if (_planning) return;
     setState(() => _planning = true);
@@ -616,7 +616,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final groups = await AiClient().groom([..._todo, ..._prog]);
       if (!mounted) return;
       if (groups.isEmpty) {
-        showBloomSnackBar(context, 'Pile looks tidy â€” nothing to groom.');
+        showBloomSnackBar(context, 'Pile looks tidy — nothing to groom.');
         return;
       }
       final byId = {for (final t in [..._todo, ..._prog]) t.id: t};
@@ -669,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding:
                                   const EdgeInsets.symmetric(vertical: 3),
                               child: Text(
-                                'â€¢ ${byId[id]?.title ?? id}',
+                                '• ${byId[id]?.title ?? id}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -755,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await _refresh();
       if (mounted && (cleared > 0 || deferred > 0)) {
         showBloomSnackBar(context,
-            'Tidied: $cleared cleared Â· $deferred deferred a week.');
+            'Tidied: $cleared cleared · $deferred deferred a week.');
       }
     } finally {
       if (mounted) setState(() => _planning = false);
@@ -857,7 +857,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final h = atRisk.first;
       showBloomSnackBar(
         context,
-        'â€œ${h.name}â€ streak (${h.streak}d) ends tonight â€” 5 min keeps it.',
+        '“${h.name}” streak (${h.streak}d) ends tonight — 5 min keeps it.',
         actionLabel: 'Keep it',
         onAction: () async {
           await HabitStore.instance.toggleToday(h.id);
@@ -867,7 +867,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Evening streak guard: after 6pm with a live streak and zero
-  /// completions today, offer one-tap rescue. Data-driven â€” completing
+  /// completions today, offer one-tap rescue. Data-driven — completing
   /// anything hides it; offline hides it too (no heatmap truth).
   bool get _streakAtRisk {
     if (!_live || DateTime.now().hour < 18) return false;
@@ -942,7 +942,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Planner header action: past 8pm with a plan done, the most useful
-  /// thing is the review â€” otherwise (re)plan the day.
+  /// thing is the review — otherwise (re)plan the day.
   void _plannerAction() {
     if (_planning) return;
     if (_plannedOnce && DateTime.now().hour >= 20) {
@@ -1079,7 +1079,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Full-plan celebration: when every pick of the current plan is done,
-  /// offer the share card once. Replaces v1's stake settle â€” the same
+  /// offer the share card once. Replaces v1's stake settle — the same
   /// peak moment, minus the punishment.
   void _maybeCelebratePlan() {
     if (_planCelebrated || !_plannedOnce || _picks.isEmpty) return;
@@ -1090,7 +1090,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     showBloomSnackBar(
       context,
-      'Clean sweep â€” a week worth sharing.',
+      'Clean sweep — a week worth sharing.',
       actionLabel: 'Share',
       onAction: () {
         Navigator.of(context).push(
@@ -1106,7 +1106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       game.markOffline();
       return;
     }
-    // Tasks signal reuses the heatmap already in hand â€” zero extra IO.
+    // Tasks signal reuses the heatmap already in hand — zero extra IO.
     if (game.target.kind == IntentionKind.tasks) {
       game.update(
         contributionsToday: heatCountFor(_heat, DateTime.now()),
@@ -1132,7 +1132,7 @@ class _HomeScreenState extends State<HomeScreen> {
     TapSound.tap();
     GamificationStateNotifier.instance.claimDailyRitual();
     // Loot box removed: rewards land directly, no mystery roll.
-    showBloomSnackBar(context, 'Bloom claimed ðŸŒ±');
+    showBloomSnackBar(context, 'Bloom claimed 🌱');
   }
 
   void _jumpToSection(int index) {
@@ -1177,7 +1177,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     // Theme-only listener at the root. Game/XP ticks used to live here
-    // too â€” which rebuilt the heatmap, HUD, quick links AND the whole
+    // too — which rebuilt the heatmap, HUD, quick links AND the whole
     // 30-card board on every XP gain. Streak/tokens now read inside
     // GameHud (listens itself) and the app bar's token pill (listens
     // itself), so an XP tick repaints those two small subtrees only.
@@ -1188,7 +1188,7 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, constraints) {
             final bool isMobile = constraints.maxWidth < _breakpoint;
             // Serene dark baseline (#120D1C) resolves through the active
-            // Sakura theme â€” midnight paints near-identical.
+            // Sakura theme — midnight paints near-identical.
             return Scaffold(
               backgroundColor:
                   Theme.of(context).scaffoldBackgroundColor,
@@ -1215,7 +1215,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               body: isMobile ? _mobileBody() : _desktopBody(),
               // One stacked section bar on every width when
-              // standalone â€” AppShell already owns the outer app
+              // standalone — AppShell already owns the outer app
               // nav and must stay the single bottom bar.
               bottomNavigationBar:
                   !widget.embedded ? _sectionBar() : null,
@@ -1264,7 +1264,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Expanded(
                 // 5:4 (was 3:2): the seedling cell needs ~140px on a 360px
-                // phone for rank/streak text beside the badge â€” at 3:2 its
+                // phone for rank/streak text beside the badge — at 3:2 its
                 // text column collapsed to ~48px and ellipsised every rank.
                 flex: 5,
                 child: DailyIntentionCard(
@@ -1319,7 +1319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 behavior: HitTestBehavior.opaque,
                 child: Text(
                   _planning
-                      ? 'Thinkingâ€¦'
+                      ? 'Thinking…'
                       : _plannedOnce && DateTime.now().hour >= 20
                           ? 'Review today'
                           : _plannedOnce
@@ -1348,7 +1348,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Yesterday left ${_carry.length} unfinished â€” re-plan first?',
+                        'Yesterday left ${_carry.length} unfinished — re-plan first?',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1364,12 +1364,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           if (!_plannedOnce)
             Text(
-              'Overdue, due-soon and high-priority first â€” tap Plan my day.',
+              'Overdue, due-soon and high-priority first — tap Plan my day.',
               style: TextStyle(fontSize: 12.5, color: SakuraColors.inkSoft),
             )
           else if (_picks.isEmpty)
             Text(
-              'Nothing open â€” enjoy the quiet.',
+              'Nothing open — enjoy the quiet.',
               style: TextStyle(fontSize: 12.5, color: SakuraColors.inkSoft),
             )
           else
@@ -1478,7 +1478,7 @@ class _HomeScreenState extends State<HomeScreen> {
               return Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'â‰ˆ ${fmtLoad(total)} across top ${_picks.length}${peak != null ? ' Â· peak $peak:00 â€” tackle #1 then' : ''}${heavy ? ' Â· heavy day â€” consider deferring one' : ' Â· fits a calm day'}',
+                  '≈ ${fmtLoad(total)} across top ${_picks.length}${peak != null ? ' · peak $peak:00 — tackle #1 then' : ''}${heavy ? ' · heavy day — consider deferring one' : ' · fits a calm day'}',
                   style: TextStyle(
                       fontSize: 11.5,
                       color: heavy
@@ -1493,7 +1493,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (repeats.isEmpty) return const SizedBox.shrink();
             final r = repeats.first;
             final name = r.task.title.length > 34
-                ? '${r.task.title.substring(0, 34)}â€¦'
+                ? '${r.task.title.substring(0, 34)}…'
                 : r.task.title;
             return GestureDetector(
               onTap: () async {
@@ -1504,7 +1504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (!mounted) return;
                 messenger.hideCurrentSnackBar();
                 messenger.showSnackBar(
-                  SnackBar(content: Text('â€œ$nameâ€ repeats weekly now.')),
+                  SnackBar(content: Text('“$name” repeats weekly now.')),
                 );
               },
               behavior: HitTestBehavior.opaque,
@@ -1517,7 +1517,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'â€œ$nameâ€ done ${r.times}x â€” repeat weekly?',
+                        '“$name” done ${r.times}x — repeat weekly?',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -1575,7 +1575,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Pile growing? Tidy itâ€¦',
+                      'Pile growing? Tidy it…',
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,

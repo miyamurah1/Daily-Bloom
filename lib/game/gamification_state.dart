@@ -10,14 +10,14 @@ import 'bloom_engine.dart';
 /// Single source of truth for Mindful Gamification.
 ///
 /// Holds XP, tokens, streak, rank, and the Flow Combo timer. Pair with
-/// `ListenableBuilder` (the app's existing pattern) â€” no Riverpod needed.
+/// `ListenableBuilder` (the app's existing pattern) — no Riverpod needed.
 ///
 /// ```dart
 /// final game = GamificationStateNotifier();
 /// await game.load();
 /// ListenableBuilder(
 ///   listenable: game,
-///   builder: (c, _) => Text('Lv ${game.level} Â· ${game.tokens}â—†'),
+///   builder: (c, _) => Text('Lv ${game.level} · ${game.tokens}◆'),
 /// );
 /// game.registerTaskCompletion(); // +XP, advances combo
 /// ```
@@ -42,7 +42,7 @@ class GamificationStateNotifier extends ChangeNotifier {
     'bloom_game_wilt_streak',
   ];
 
-  /// App-wide singleton â€” screens share one combo / XP / streak.
+  /// App-wide singleton — screens share one combo / XP / streak.
   static final GamificationStateNotifier instance =
       GamificationStateNotifier();
 
@@ -127,7 +127,7 @@ class GamificationStateNotifier extends ChangeNotifier {
   /// Call when a task is completed. Returns the XP granted (incl. bonus).
   /// Chains completions inside [BloomEngine.comboWindow] into a combo.
   /// Pass the task id so a later undo can revoke exactly what was granted
-  /// (anti-farm: done â†’ undo â†’ done must not mint XP).
+  /// (anti-farm: done → undo → done must not mint XP).
   int registerTaskCompletion(
       {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
     final now = DateTime.now();
@@ -158,8 +158,8 @@ class GamificationStateNotifier extends ChangeNotifier {
   }
 
   /// Call when a completed task is reopened (undone). Revokes the XP its
-  /// completion granted â€” the exact last gain when it was this task's,
-  /// otherwise the base amount â€” breaks the combo chain and walks back
+  /// completion granted — the exact last gain when it was this task's,
+  /// otherwise the base amount — breaks the combo chain and walks back
   /// today's completion count. Total XP floors at zero: levels can drop,
   /// never below nothing. Returns the XP revoked.
   int revokeTaskCompletion(
@@ -201,7 +201,7 @@ class GamificationStateNotifier extends ChangeNotifier {
   ///
   /// Milestones feel like milestones: 7/30/100-day streaks fire the
   /// celebration fanfare (heavy impact); an ordinary next-day tick fires
-  /// the confirm tick. Same-day no-ops and broken resets stay silent â€”
+  /// the confirm tick. Same-day no-ops and broken resets stay silent —
   /// haptics reward progress, never punish a miss. Pass [quiet] at boot:
   /// browsers block vibration before the first user gesture and log an
   /// intervention, so the startup tick stays silent.
@@ -276,7 +276,7 @@ class GamificationStateNotifier extends ChangeNotifier {
 
   /// Demo helper: max the profile to Full Bloom so the whole app can be
   /// seen at Lv 100 (Sakura, 5/5 season, live x5 combo, petals on).
-  /// No server writes â€” local game juice only.
+  /// No server writes — local game juice only.
   void debugFullBloom() {
     _totalXp = BloomEngine.totalXpForLevel(BloomEngine.maxLevel);
     _tokens += 2500;
@@ -347,7 +347,7 @@ class GamificationStateNotifier extends ChangeNotifier {
       _doneCount = prefs.getInt(_kDoneCount) ?? 0;
       _nudgedDayIso = prefs.getString(_kNudgedDay);
       // One-time purge of the removed stake/wilt keys (v1.0 punishment
-      // mechanics). Best-effort â€” a failing remove must not block boot.
+      // mechanics). Best-effort — a failing remove must not block boot.
       for (final key in _legacyStakeKeys) {
         try {
           await prefs.remove(key);
@@ -376,7 +376,7 @@ class GamificationStateNotifier extends ChangeNotifier {
         await prefs.setString(_kNudgedDay, _nudgedDayIso!);
       }
     } catch (_) {
-      // Persistence is a bonus â€” gameplay continues in memory.
+      // Persistence is a bonus — gameplay continues in memory.
     }
   }
 
@@ -389,7 +389,7 @@ class GamificationStateNotifier extends ChangeNotifier {
       _comboCount = 0;
       return;
     }
-    // Cap the OS timer at 15 min â€” exact, one shot, cheap.
+    // Cap the OS timer at 15 min — exact, one shot, cheap.
     _comboTimer = Timer(wait, () {
       _comboCount = 0;
       _comboExpiresAt = null;
