@@ -10,6 +10,10 @@
          (USE_EXACT_ALARM deliberately NOT declared — Play reserves it
          for clock/calendar apps; SCHEDULE_EXACT_ALARM is user-grantable.) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Reboot/update re-scheduling: AlarmManager alarms are dropped on
+         reboot (and the plugin can't reschedule without hearing about it).
+         Normal install-time permission — no runtime prompt, Play-safe. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="Daily Bloom"
         android:name="${applicationName}"
@@ -58,6 +62,23 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/plan_widget_info" />
+        </receiver>
+        <!-- flutter_local_notifications: REQUIRED manifest receivers (their
+             own manifest declares neither). Without these, AlarmManager's
+             broadcast has no target and scheduled notifications (daily
+             nudge, weekly review, focus expiry) never display — plus
+             reminders don't survive reboot/app update. Verbatim from the
+             plugin README setup section. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
         </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
