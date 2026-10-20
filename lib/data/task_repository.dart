@@ -96,10 +96,13 @@ class TaskRepository extends ChangeNotifier {
       final title = (g['title'] as String? ?? '').trim();
       if (title.isEmpty) continue;
       try {
-        await createTask(
+        final created = await createTask(
           title: title,
           folder: (g['folder'] as String?) ?? 'Productivity',
         );
+        if (g['done'] == true) {
+          await moveTask(created.id, 'done');
+        }
         migrated++;
       } catch (_) {
         // Keep going: one bad entry must not strand the rest. The

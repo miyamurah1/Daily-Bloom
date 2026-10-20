@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_wipe.dart';
+import 'guest_store.dart';
 import 'profile_name.dart';
+import 'task_repository.dart';
 
 /// Logged-in user profile (mirrors the backend's `publicUser()` shape).
 class AuthUser {
@@ -192,6 +194,24 @@ class AuthStore extends ChangeNotifier {
           final sameAccount = cached != null &&
               cached.email.toLowerCase() ==
                   (firebaseUser.email ?? '').toLowerCase();
+          // Guest tasks live in the repository's local cache, which the
+          // account-switch wipe below destroys (memory + disk). Copy them
+          // into GuestStore — a key the wipe spares — so
+          // _migrateGuestTasks can carry them into the account after the
+          // profile sync, without racing the wipe.
+          if (TaskRepository.instance.guestMode) {
+            await GuestStore.instance.replaceAll(
+              TaskRepository.instance.tasks
+                  .map((t) => {
+                        'id': t.id,
+                        'title': t.title,
+                        'folder': t.folder,
+                        'done': t.status == 'done',
+                      })
+                  .toList(),
+            );
+          }
+
           if (!sameAccount) {
             await clearAccountData();
           }
@@ -217,6 +237,8 @@ class AuthStore extends ChangeNotifier {
               await _persistUser();
             }
           }
+          await _migrateGuestTasks();
+
           _ready = true;
           notifyListeners();
         }
@@ -438,6 +460,42 @@ class AuthStore extends ChangeNotifier {
       await prefs.remove(_kUser);
     }
   }
+
+  /// Carry guest tasks into the synced repo after a successful sign-in.
+  ///
+  /// Runs once per guest→signed-in transition, guarded by the persisted
+  /// guest flag: re-enables syncing on the repository (it was pinned to
+  /// guest-only writes), migrates [GuestStore.migrateCandidates] through
+  /// [TaskRepository.migrateGuestTasks], then clears the guest store and
+  /// drops the flag. Best-effort and silent — a partial migration leaves
+  /// the flag set so the next auth event retries, and a failure never
+  /// blocks or delays sign-in.
+  Future<void> _migrateGuestTasks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('bloom_guest_mode_v1') != true) return;
+      // Authenticated now: without this, createTask would short-circuit
+      // into guest-only local writes and nothing would ever sync.
+      await TaskRepository.instance.setGuestMode(false);
+      await GuestStore.instance.load();
+      final candidates = GuestStore.instance
+          .migrateCandidates()
+          .where((g) => ((g['title'] as String?) ?? '').trim().isNotEmpty)
+          .toList();
+      if (candidates.isNotEmpty) {
+        final migrated =
+            await TaskRepository.instance.migrateGuestTasks(candidates);
+        // Keep the flag (and the guest store) for a later retry if any
+        // entry failed — silently dropping tasks is worse than retrying.
+        if (migrated < candidates.length) return;
+      }
+      await GuestStore.instance.clear();
+      await prefs.setBool('bloom_guest_mode_v1', false);
+    } catch (_) {
+      // Never block sign-in; the next auth event retries the migration.
+    }
+  }
+
 
   Future<void> _clearPersisted() async {
     final prefs = await SharedPreferences.getInstance();

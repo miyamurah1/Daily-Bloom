@@ -90,6 +90,17 @@ class GuestStore {
     return List.unmodifiable(_tasks);
   }
 
+  /// Replace all guest tasks in a single write.
+  ///
+  /// Used when capturing tasks out of the in-memory repository right
+  /// before an account wipe. Deliberately does NOT enforce the 3-task
+  /// cap — captured data must survive intact for migration.
+  Future<void> replaceAll(List<Map<String, dynamic>> tasks) async {
+    _tasks = [...tasks];
+    await _persist();
+  }
+
+
   Future<void> _persist() async {
     try {
       final prefs = await SharedPreferences.getInstance();

@@ -83,10 +83,10 @@ class _AppShellState extends State<AppShell>
     // ✓ flags — hence the repo listener at the shell, not per-screen.
     TaskRepository.instance.addListener(_syncWidgetDoneFlags);
 
-    // Guest mode: work entirely from local cache, never sync.
-    if (_isGuest) {
-      TaskRepository.instance.setGuestMode(true);
-    }
+    // Guest mode: work entirely from local cache, never sync. Explicit on
+    // BOTH branches so the guest→sign-in shell swap can't leave the
+    // repository pinned in guest-only mode (silently never syncing).
+    TaskRepository.instance.setGuestMode(_isGuest);
   }
 
   /// Route a widget tap: the ✓ button completes its task, a task row
