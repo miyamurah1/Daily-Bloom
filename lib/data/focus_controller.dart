@@ -68,11 +68,18 @@ class FocusController extends ChangeNotifier {
   /// One-shot message for the mini-player to show as a snackbar.
   String? notice;
 
+  /// Set alongside a completion [notice] when the finished session was
+  /// linked to a task: the mini-player offers "Mark done" as a one-tap
+  /// payoff that closes the focus → task loop. Never automatic — the user
+  /// taps it. Consumed with the notice.
+  String? noticeTaskId;
+
   bool get active => sessionId != null;
 
   String? consumeNotice() {
     final n = notice;
     notice = null;
+    noticeTaskId = null;
     return n;
   }
 
@@ -190,6 +197,7 @@ class FocusController extends ChangeNotifier {
     final wasFocus = mode == 'focus';
     final title = task?.title ?? 'Free Focus';
     final sub = subtaskTitle;
+    final linkedTaskId = task?.id;
     _clear();
     // Chime + haptics the moment a session completes — natural expiry
     // and manual Finish both land here. Abandon stays silent on purpose.
@@ -211,6 +219,9 @@ class FocusController extends ChangeNotifier {
               ? 'Focused $actual min on "$title" • heatmap +1'
               : 'Focused $actual min on "$sub" • heatmap +1')
           : 'Break over — back to it.';
+      // Close the loop: a finished, task-linked focus session offers a
+      // one-tap "Mark done" so effort converts to a completed task.
+      noticeTaskId = (wasFocus && linkedTaskId != null) ? linkedTaskId : null;
     } catch (e) {
       if (e is! AuthExpiredException) {
         notice = 'Could not save session: $e';

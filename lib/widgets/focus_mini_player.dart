@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/focus_controller.dart';
+import '../data/task_repository.dart';
 import '../screens/focus_timer_screen.dart';
 import '../theme/sakura_theme.dart';
+import 'bloom_snackbar.dart';
 import 'motion.dart';
 
 /// Persistent countdown bar above the bottom nav. Visible on every tab
@@ -19,14 +21,25 @@ class FocusMiniPlayer extends StatelessWidget {
       builder: (context, _) {
         final fc = FocusController.instance;
         final note = fc.notice;
+        final doneTaskId = fc.noticeTaskId;
         if (note != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             // Another frame may have consumed it first (ticks rebuild
             // every second) — show exactly once.
             if (FocusController.instance.notice == null) return;
             FocusController.instance.consumeNotice();
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(note)));
+            // Payoff loop: a finished, task-linked focus session offers a
+            // one-tap "Mark done" so the effort converts to a completed
+            // task. Nothing auto-completes — the user opts in here.
+            showBloomSnackBar(
+              context,
+              note,
+              duration: const Duration(seconds: 5),
+              actionLabel: doneTaskId != null ? 'Mark done' : null,
+              onAction: doneTaskId != null
+                  ? () => TaskRepository.instance.moveTask(doneTaskId, 'done')
+                  : null,
+            );
           });
         }
         if (!fc.active) return const SizedBox.shrink();

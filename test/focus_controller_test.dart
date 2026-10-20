@@ -136,6 +136,28 @@ void main() {
     expect(fc.consumeNotice(), contains('Could not save'));
   });
 
+  test('task-linked finish offers the Mark done payoff id', () async {
+    await fc.start(task: task, minutes: 25, mode: 'focus');
+    await fc.finish();
+    // The payoff loop: a finished, task-linked focus session surfaces the
+    // task id so the mini-player can offer a one-tap "Mark done".
+    expect(fc.noticeTaskId, 't1');
+    fc.consumeNotice();
+    expect(fc.noticeTaskId, isNull, reason: 'payoff id is consumed too');
+  });
+
+  test('free focus and break sessions offer no Mark done payoff', () async {
+    await fc.start(minutes: 10, mode: 'focus');
+    await fc.finish();
+    expect(fc.noticeTaskId, isNull, reason: 'no task to complete');
+    fc.consumeNotice();
+
+    await fc.start(task: task, minutes: 5, mode: 'break');
+    await fc.finish();
+    expect(fc.noticeTaskId, isNull, reason: 'a break never completes a task');
+    fc.consumeNotice();
+  });
+
   test('abandon banks partial minutes instead of discarding', () async {
     await fc.start(task: task, minutes: 10, mode: 'break');
     await fc.abandon();
