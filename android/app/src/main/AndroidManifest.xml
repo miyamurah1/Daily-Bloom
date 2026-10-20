@@ -71,6 +71,11 @@
              plugin README setup section. -->
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <!-- Notification ACTION buttons ("Done ✓", "Plant 🌱") and the
+             dismiss/delete intent are delivered as broadcasts to this
+             receiver; without it the buttons render but do nothing. -->
+        <receiver android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
         <receiver android:exported="false"
             android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
