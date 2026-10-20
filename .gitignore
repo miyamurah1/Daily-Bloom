@@ -70,3 +70,6 @@ lib/firebase_options.dart
 android/key.properties
 *.jks
 *.keystore
+
+# Golden test failure artifacts (never commit diff PNGs)
+test/failures/
