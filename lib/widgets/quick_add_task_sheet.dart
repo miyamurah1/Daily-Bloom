@@ -62,6 +62,142 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
   String _priority = 'none';
   bool _repeatsDaily = false;
 
+  /// Capture speed: the default sheet is just title → Plant (<3s).
+  /// Due date + repeats collapse behind this toggle so nothing competes
+  /// with the primary action until asked for.
+  bool _showOptions = false;
+
+  /// One-tap due shortcuts surfaced inline; the calendar is the fallback.
+  DateTime? get _dueToday {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  bool get _dueIsToday =>
+      _dueAt != null &&
+      _dueAt!.year == DateTime.now().year &&
+      _dueAt!.month == DateTime.now().month &&
+      _dueAt!.day == DateTime.now().day;
+
+  bool get _dueIsTomorrow {
+    final t = _dueToday!.add(const Duration(days: 1));
+    return _dueAt != null &&
+        _dueAt!.year == t.year &&
+        _dueAt!.month == t.month &&
+        _dueAt!.day == t.day;
+  }
+
+  String get _dueSummary {
+    if (_dueAt == null) return 'No date';
+    if (_dueIsToday) return 'Today';
+    if (_dueIsTomorrow) return 'Tomorrow';
+    return '${_dueAt!.month}/${_dueAt!.day}';
+  }
+
+  void _clearDue() => setState(() => _dueAt = null);
+
+  void _setDueToday() => setState(() => _dueAt = _dueToday);
+
+  void _setDueTomorrow() =>
+      setState(() => _dueAt = _dueToday!.add(const Duration(days: 1)));
+
+  Future<void> _pickDueCalendar() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueAt ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+    );
+    if (picked == null || !mounted) return;
+    final at = await showTimePicker(
+      context: context,
+      initialTime: _dueAt == null
+          ? const TimeOfDay(hour: 9, minute: 0)
+          : TimeOfDay.fromDateTime(_dueAt!.toLocal()),
+      helpText: 'Due time (optional — cancel for date-only)',
+    );
+    if (!mounted) return;
+    setState(() {
+      _dueAt = at == null
+          ? DateTime(picked.year, picked.month, picked.day)
+          : DateTime(picked.year, picked.month, picked.day, at.hour, at.minute);
+    });
+  }
+
+  /// Summary row for the collapsed options: shows due + repeat at a glance
+  /// and toggles the full options block open/closed.
+  Widget _optionsRow() {
+    final active = _dueAt != null || _repeatsDaily;
+    final summary = [
+      _dueSummary,
+      if (_repeatsDaily) 'Daily',
+    ].join('  ·  ');
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _showOptions = !_showOptions),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: SakuraColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: SakuraColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(LucideIcons.calendarClock,
+                size: 16,
+                color: active ? SakuraColors.primary : SakuraColors.inkFaint),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                active ? summary : 'Add date, repeats',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: active ? SakuraColors.ink : SakuraColors.inkFaint,
+                ),
+              ),
+            ),
+            Icon(
+              _showOptions ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+              size: 16,
+              color: SakuraColors.inkFaint,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A single due-date chip; [active] highlights it in the brand tint.
+  Widget _dueChip(String label,
+      {required bool active, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: () {
+        AppHaptics.tap();
+        onTap();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? SakuraColors.primarySoft : SakuraColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? SakuraColors.primary : SakuraColors.cardBorder,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: active ? SakuraColors.primary : SakuraColors.inkSoft,
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Voice capture: dictation appends into the title field, then the
   /// normal Auto-fill/Plant flow takes over. Unavailable platforms
   /// (or denied mic) degrade to typing with one honest line.
@@ -375,9 +511,32 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              // Unified Action: one capture, one toggle. The app infers
-              // the type — no "Tasks vs Habits vs Rituals" decision.
-              Container(
+              // Capture speed: options stay folded until asked for, so the
+              // default path is just title → Plant (<3s).
+              _optionsRow(),
+              if (_showOptions) ...[
+                const SizedBox(height: 12),
+                // One-tap due shortcuts; calendar is the fallback.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _dueChip('Today',
+                        active: _dueIsToday, onTap: _setDueToday),
+                    _dueChip('Tomorrow',
+                        active: _dueIsTomorrow, onTap: _setDueTomorrow),
+                    _dueChip('Pick date…',
+                        active:
+                            _dueAt != null && !_dueIsToday && !_dueIsTomorrow,
+                        onTap: _pickDueCalendar),
+                    if (_dueAt != null)
+                      _dueChip('Clear', active: false, onTap: _clearDue),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Unified Action: one capture, one toggle. The app infers
+                // the type — no "Tasks vs Habits vs Rituals" decision.
+                Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: SakuraColors.background,
@@ -421,6 +580,7 @@ class _QuickAddTaskSheetState extends State<QuickAddTaskSheet> {
                   ],
                 ),
               ),
+              ],
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,

@@ -416,8 +416,9 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_) => AlertDialog(
           title: const Text('Keep your blooms'),
           content: const Text(
-            'Guests can add up to 3 tasks. Create a free account to keep '
-            'adding tasks and sync them across devices.',
+            'Guests can add up to 3 tasks. Create a free account and your '
+            '3 tasks move with you — nothing is lost, and you can keep '
+            'adding and syncing across devices.',
           ),
           actions: [
             TextButton(
@@ -1819,14 +1820,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           // Advanced-only surfaces (Simple Mode hides these).
           if (!SimpleMode.instance.enabled) ...[
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            // First-week arc: one quiet prompt until the loop is learned.
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _arcRow(),
-              ),
-            ),
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
             // Plan: the day's planner.
             SliverToBoxAdapter(
