@@ -297,7 +297,10 @@ class _PressableState extends State<Pressable> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) {
-        if (widget.enabled) setState(() => _down = true);
+        if (widget.enabled) {
+          setState(() => _down = true);
+          AppHaptics.tap();
+        }
       },
       onTapUp: (_) => setState(() => _down = false),
       onTapCancel: () => setState(() => _down = false),

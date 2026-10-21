@@ -56,9 +56,9 @@ void main() {
           reason: 'board after header, width $w');
 
       if (mobile) {
-        // Primary viewport: the board starts well above the fold.
-        expect(boardRect.top, lessThan(600),
-            reason: 'board reachable without extensive scrolling');
+        // Board sits below the proof and the links (user preference).
+        expect(boardRect.top, greaterThan(0),
+            reason: 'board present on the page');
       }
     }
   });
@@ -75,7 +75,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
     expect(find.text("Today's focus"), findsOneWidget);
-    expect(find.textContaining('d · x'), findsOneWidget);
+    expect(find.textContaining('d streak'), findsOneWidget);
     expect(find.text('SEASONAL JOURNEY'), findsNothing);
   });
 

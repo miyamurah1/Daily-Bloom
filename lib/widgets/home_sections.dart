@@ -232,7 +232,7 @@ class GameHud extends StatelessWidget {
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(
-                                '${game.streak}d · x${game.comboCount}',
+                                '${game.streak}d streak',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -268,7 +268,7 @@ class GameHud extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      '${game.xpIntoLevel}/${game.xpNeeded} XP',
+                      '${game.xpNeeded - game.xpIntoLevel} XP to Level ${game.level + 1}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

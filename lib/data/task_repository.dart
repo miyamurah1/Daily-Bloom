@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'analytics.dart';
 import 'auth_store.dart';
+import 'guest_store.dart';
 import 'mock_data.dart';
 
 /// Single source of truth for all tasks across the application.
@@ -86,8 +87,13 @@ class TaskRepository extends ChangeNotifier {
   /// Each guest entry is created via the normal [createTask] path (full
   /// optimistic + outbox flow), so migration is offline-safe: unreachable
   /// backend just queues the creates for replay. Returns the number of
-  /// tasks migrated. Callers should clear the guest store + guest flag
-  /// afterwards.
+  /// tasks migrated.
+  ///
+  /// Idempotent: each successfully migrated entry is dropped from
+  /// [GuestStore] as it lands. Without that, a partial migration (one
+  /// bad entry, offline backend) would leave the whole list in place, and
+  /// the retry on the next auth event would create the already-migrated
+  /// tasks a second time.
   Future<int> migrateGuestTasks(
       List<Map<String, dynamic>> guestTasks) async {
     if (guestTasks.isEmpty) return 0;
@@ -95,6 +101,7 @@ class TaskRepository extends ChangeNotifier {
     for (final g in guestTasks) {
       final title = (g['title'] as String? ?? '').trim();
       if (title.isEmpty) continue;
+      final guestId = g['id'] as String?;
       try {
         final created = await createTask(
           title: title,
@@ -104,10 +111,15 @@ class TaskRepository extends ChangeNotifier {
           await moveTask(created.id, 'done');
         }
         migrated++;
+        // Landed — drop it from the guest store so a retry cannot
+        // duplicate it.
+        if (guestId != null && guestId.isNotEmpty) {
+          await GuestStore.instance.remove(guestId);
+        }
       } catch (_) {
-        // Keep going: one bad entry must not strand the rest. The
-        // failed create stays out of the repo; the guest store is only
-        // cleared on full success by the caller.
+        // Stop at the first failure: the remaining entries stay in the
+        // guest store and the caller keeps the guest flag set, so the
+        // next auth event retries exactly what is still missing.
         break;
       }
     }

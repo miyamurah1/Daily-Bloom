@@ -4,6 +4,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/motion.dart';
 import '../widgets/theme_card.dart';
 
 /// Theme Store — live catalog: buy with earned tokens, equip to re-skin
@@ -212,7 +213,9 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
         ],
       ),
-      body: _loading
+      body: Entrance(
+          delayMs: 80,
+          child: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
@@ -263,6 +266,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   );
                 },
               ),
+            ),
             ),
     );
   }

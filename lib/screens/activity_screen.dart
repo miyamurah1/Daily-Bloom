@@ -5,6 +5,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/motion.dart';
 
 IconData _iconForKind(String kind) {
   switch (kind) {
@@ -116,7 +117,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 fontWeight: FontWeight.w800,
                 color: SakuraColors.ink)),
       ),
-      body: _loading
+      body: Entrance(
+          delayMs: 80,
+          child: _loading
           ? const Center(child: CircularProgressIndicator())
           : _events.isEmpty
               ? Center(
@@ -211,6 +214,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     },
                   ),
                 ),
+    ),
     );
   }
 }

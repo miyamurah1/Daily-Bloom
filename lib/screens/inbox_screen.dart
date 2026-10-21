@@ -6,6 +6,7 @@ import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/inbox_store.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/motion.dart';
 
 class InboxItem {
   final String tag;
@@ -153,7 +154,9 @@ class _InboxScreenState extends State<InboxScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: SakuraColors.background,
-      body: SafeArea(
+      body: Entrance(
+        delayMs: 80,
+        child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           onRefresh: _load,
@@ -396,6 +399,7 @@ class _InboxScreenState extends State<InboxScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -3,9 +3,9 @@
 // Auth is Firebase in production, which tests cannot mint. The server
 // exposes a test-only bypass (see requireAuth): run BOTH the api and the
 // suite with the same bypass token, e.g. PowerShell:
-//   $env:NODE_ENV='test'; $env:TEST_BYPASS_TOKEN='ci-local-secret'
+//   $env:NODE_ENV='test'; $env:ENABLE_TEST_BYPASS='1'; $env:TEST_BYPASS_TOKEN='ci-local-secret'
 //   npm run dev   (terminal 1)   +   npm test   (terminal 2)
-// The hatch is closed unless BOTH vars are set — production is unaffected.
+// The hatch is closed unless ALL THREE vars are set — production is unaffected.
 //
 // Needs the stack up first:
 //   1. docker compose up -d        (postgres on :5433)

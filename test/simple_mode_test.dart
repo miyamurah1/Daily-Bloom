@@ -1,4 +1,4 @@
-﻿// Simple Mode: the calm default that hides power-tool doors without
+// Simple Mode: the calm default that hides power-tool doors without
 // removing them. Verifies persistence and the Home quick-link adaption.
 import 'package:daily_bloom/data/simple_mode.dart';
 import 'package:daily_bloom/screens/home_screen.dart';
@@ -48,9 +48,8 @@ void main() {
     SimpleMode.instance.debugReset(true);
     await _pumpHome(tester);
     expect(find.text('BOARD \u2192', skipOffstage: false), findsNothing,
-        reason: 'power tool hidden, not deleted');
-    expect(find.text('HISTORY \u2192', skipOffstage: false), findsNothing,
-        reason: 'quick links are an Advanced surface');
+        reason: 'Board is an Advanced surface');
+    expect(find.text('HISTORY \u2192', skipOffstage: false), findsOneWidget);
     expect(find.text("Today's focus"), findsOneWidget);
   });
 }

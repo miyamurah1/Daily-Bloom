@@ -7,6 +7,7 @@ import '../data/auth_store.dart';
 import '../data/haptics.dart';
 import '../data/session_sound.dart';
 import '../data/tap_sound.dart';
+import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
@@ -265,18 +266,28 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // ── App header ────────────────────────────────────────
                   Entrance(
-                    delayMs: 0,
+                    delayMs: 100,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '日常',
-                          style: SakuraTheme.display(
-                            fontSize: 30,
-                            height: 1.0,
-                            fontWeight: FontWeight.w800,
-                            color: SakuraColors.primary,
-                            letterSpacing: 4,
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0.85, end: 1.0),
+                          duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false) ? Duration.zero : AppMotion.entrance,
+                          curve: AppMotion.entranceCurve,
+                          builder: (context, scale, child) => Transform.scale(
+                            scale: scale,
+                            alignment: Alignment.centerLeft,
+                            child: child,
+                          ),
+                          child: Text(
+                            '日常',
+                            style: SakuraTheme.display(
+                              fontSize: 30,
+                              height: 1.0,
+                              fontWeight: FontWeight.w800,
+                              color: SakuraColors.primary,
+                              letterSpacing: 4,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 2),

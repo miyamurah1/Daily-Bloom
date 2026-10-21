@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../data/profile_name.dart';
 import '../data/background_music.dart';
 import '../data/calendar_export.dart';
 import '../data/crash_reports.dart';
@@ -21,7 +22,6 @@ import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../game/game.dart';
 
-import '../screens/rules_screen.dart';
 import '../theme/sakura_theme.dart';
 
 
@@ -237,8 +237,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// services. A denied notification permission keeps the toggles off and
   /// explains instead of failing the whole save.
   Future<void> _openProfileEditor() async {
-    final user = AuthStore.instance.user;
-    if (user == null) return;
+    final profileName = await ProfileName.read();
+    final user = AuthStore.instance.user ?? AuthUser(
+      id: 'guest',
+      email: '',
+      displayName: profileName,
+    );
+    if (!mounted) return;
     AppHaptics.tap();
     final saved = await showDialog<bool>(
       context: context,
@@ -799,7 +804,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontWeight: FontWeight.w800,
                 color: SakuraColors.ink)),
       ),
-      body: ListView(
+      body: Entrance(
+          delayMs: 80,
+          child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         children: [
           Container(
@@ -1012,16 +1019,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                TextButton(
-                  onPressed: _reminderBusy ? null : _pickReminderTime,
-                  child: const Text('Change',
-                      style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700)),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: _reminderBusy ? null : _pickReminderTime,
+                      child: const Text('Change',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                    Switch(
+                      value: _reminderOn,
+                      onChanged:
+                          _reminderBusy ? null : (v) => _toggleReminder(v),
+                      activeThumbColor: SakuraColors.primary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: SakuraColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.moon,
+                      size: 15, color: SakuraColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dark mode',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: SakuraColors.ink),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Midnight Tokyo theme.',
+                        style: TextStyle(
+                            fontSize: 12, color: SakuraColors.inkSoft),
+                      ),
+                    ],
+                  ),
                 ),
                 Switch(
-                  value: _reminderOn,
-                  onChanged:
-                      _reminderBusy ? null : (v) => _toggleReminder(v),
+                  value: ThemeStore.instance.themeId == 'midnight',
+                  onChanged: (v) {
+                    final id = v ? 'midnight' : 'edo';
+                    ThemeStore.instance.equip(() async {}, id);
+                  },
                   activeThumbColor: SakuraColors.primary,
                 ),
               ],
@@ -1327,54 +1386,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          // Rules & automations — moved out of the Insights hub so it no
-          // longer fights for space with analytics/review/inbox.
-          GestureDetector(
-            onTap: () => Navigator.of(context).push(
-              SakuraPageRoute(builder: (_) => const RulesScreen()),
-            ),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: SakuraTheme.cardDecoration(),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: SakuraColors.primary.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(LucideIcons.workflow,
-                        size: 15, color: SakuraColors.primary),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Rules & automations',
-                          style: TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Automate task flows, reminders and reviews.',
-                          style: TextStyle(
-                              fontSize: 12, color: SakuraColors.inkSoft),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(LucideIcons.chevronRight,
-                      size: 16, color: SakuraColors.inkFaint),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1451,6 +1462,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
       },

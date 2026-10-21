@@ -1,5 +1,5 @@
 // Firebase Auth middleware. Moved verbatim from src/index.js
-// (route split) â€” wrapped in a pool factory. No logic changes.
+// (route split) — wrapped in a pool factory. No logic changes.
 import { getAuth } from 'firebase-admin/auth';
 
 export const publicUser = (row) => ({
@@ -12,9 +12,31 @@ export const publicUser = (row) => ({
   created_at: row.created_at,
 });
 
+/// True when a Postgres error means "the database is unreachable" rather
+/// than "the query was wrong". The driver's error code varies by platform
+/// (ECONNREFUSED on Linux/macOS, ETIMEDOUT/EAI_AGAIN elsewhere), so the
+/// message is inspected as well.
+export function isDatabaseOffline(err) {
+  if (!err) return false;
+  const code = err.code;
+  if (code === 'ECONNREFUSED' || code === 'ETIMEDOUT' || code === 'EAI_AGAIN') {
+    return true;
+  }
+  const msg = String(err.message ?? '');
+  return (
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('Connection terminated') ||
+    msg.includes('timeout exceeded') ||
+    msg.includes('connect ') ||
+    msg.includes('getaddrinfo')
+  );
+}
+
 export function createRequireAuth(pool) {
 const testBypass =
-  process.env.NODE_ENV === 'test' ? process.env.TEST_BYPASS_TOKEN : null;
+  process.env.ENABLE_TEST_BYPASS === '1' && process.env.TEST_BYPASS_TOKEN
+    ? process.env.TEST_BYPASS_TOKEN
+    : null;
 
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -90,10 +112,24 @@ async function requireAuth(req, res, next) {
     const decoded = await getAuth().verifyIdToken(idToken);
     req.firebaseUid = decoded.uid;
     // Look up the DB user row by firebase_uid.
-    const { rows } = await pool.query(
-      'SELECT id FROM users WHERE firebase_uid = $1',
-      [decoded.uid],
-    );
+    let rows;
+    try {
+      ({ rows } = await pool.query(
+        'SELECT id FROM users WHERE firebase_uid = $1',
+        [decoded.uid],
+      ));
+    } catch (dbErr) {
+      // The database is unreachable. Every scoped query keys on
+      // `user_id UUID`, so there is no honest fallback id to hand the
+      // route layer — a Firebase UID is not a UUID and Postgres would
+      // reject it. Report "unavailable" instead: the app falls back to
+      // its local cache and stays truthful about being offline.
+      if (isDatabaseOffline(dbErr)) {
+        console.warn('[auth] database offline - serving 503');
+        return res.status(503).json({ error: 'database unavailable' });
+      }
+      throw dbErr;
+    }
     if (!rows.length) {
       return res.status(401).json({ error: 'account not found — please sign in again' });
     }

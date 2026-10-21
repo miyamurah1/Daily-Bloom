@@ -1,6 +1,7 @@
 // Firebase Auth routes. Moved verbatim from src/index.js (route split).
 // No logic changes.
 import { getAuth } from 'firebase-admin/auth';
+import { isDatabaseOffline } from '../lib/auth.js';
 
 export function registerAuthRoutes(app, { pool, requireAuth, publicUser, authLimiter }) {
 // --- Firebase Auth routes ---
@@ -107,6 +108,16 @@ app.post('/api/auth/firebase-sync', authLimiter, async (req, res) => {
     }
     res.json({ user });
   } catch (e) {
+    // The database is unreachable. A synthetic user would need a UUID
+    // `id` to match every scoped table, and no UUID can be minted here
+    // without the DB. Returning a Firebase UID would make the next
+    // task query fail with a Postgres type error, so the honest answer
+    // is "the backend is down" — the app keeps its local cache and
+    // retries on the next sign-in.
+    if (isDatabaseOffline(e)) {
+      console.warn('[auth] database offline - serving 503');
+      return res.status(503).json({ error: 'database unavailable' });
+    }
     console.error('[auth] firebase-sync failed:', e?.code ?? e?.message);
     res.status(401).json({ error: 'invalid or expired Firebase token' });
   }

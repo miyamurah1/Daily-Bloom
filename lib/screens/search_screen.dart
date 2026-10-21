@@ -232,7 +232,9 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
       ),
-      body: Column(
+      body: Entrance(
+          delayMs: 80,
+          child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
@@ -487,6 +489,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       ),
           ),
         ],
+      ),
       ),
     );
   }

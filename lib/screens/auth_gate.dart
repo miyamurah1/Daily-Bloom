@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_store.dart';
+import '../data/background_music.dart';
+import '../data/haptics.dart';
+import '../data/tap_sound.dart';
+import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/motion.dart';
+import '../widgets/petal_rain.dart';
 import 'app_shell.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
@@ -70,7 +75,7 @@ class _AuthGateState extends State<AuthGate> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('bloom_guest_mode_v1', true);
-      await prefs.setBool(OnboardingScreen.seenKey, true);
+      // Guests see onboarding too - don't skip it.
     } catch (_) {}
     if (!mounted) return;
     setState(() {
@@ -172,37 +177,55 @@ class _AuthGateState extends State<AuthGate> {
   /// Themed splash: resolves through the active Sakura theme so cold
   /// starts never flash the default light Scaffold in Midnight.
   Widget _splash() {
+    final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return Scaffold(
       backgroundColor: SakuraColors.background,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '日常',
-              style: SakuraTheme.display(
-                fontSize: 36,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 4,
-                color: SakuraColors.primary,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: reduce ? Duration.zero : AppMotion.entrance,
+          curve: AppMotion.entranceCurve,
+          builder: (context, t, _) {
+            return Opacity(
+              opacity: t,
+              child: Transform.scale(
+                scale: 0.92 + 0.08 * t,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '日常',
+                      style: SakuraTheme.display(
+                        fontSize: 36,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 4,
+                        color: SakuraColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'COMPLETE TASKS · SEE PROOF · GROW',
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 2.4,
+                        fontWeight: FontWeight.w700,
+                        color: SakuraColors.inkFaint,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: SakuraColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'COMPLETE TASKS · SEE PROOF · GROW',
-              style: TextStyle(
-                fontSize: 10,
-                letterSpacing: 2.4,
-                fontWeight: FontWeight.w700,
-                color: SakuraColors.inkFaint,
-              ),
-            ),
-            const SizedBox(height: 16),
-            CircularProgressIndicator(
-              strokeWidth: 2,
-              color: SakuraColors.primary,
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -214,7 +237,7 @@ class _AuthGateState extends State<AuthGate> {
 /// Presents the core value ("one task, one timer, one focus") and lets the
 /// user continue as guest or sign in. Signing in simply closes this screen;
 /// the StreamBuilder above detects the new Firebase user and routes to AppShell.
-class WelcomeGate extends StatelessWidget {
+class WelcomeGate extends StatefulWidget {
   final VoidCallback onGuest;
   final VoidCallback onSignIn;
 
@@ -225,103 +248,150 @@ class WelcomeGate extends StatelessWidget {
   });
 
   @override
+  State<WelcomeGate> createState() => _WelcomeGateState();
+}
+
+class _WelcomeGateState extends State<WelcomeGate> {
+  @override
+  void initState() {
+    super.initState();
+    // A single welcome tick as the cascade begins — keeps the haptic
+    // language in sync with the entrance animation.
+    AppHaptics.select();
+    // Soft welcome blip + resume the opt-in background loop; both are
+    // guarded and no-op when disabled/headless.
+    TapSound.tap();
+    BackgroundMusic.start();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: SakuraColors.background,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 40),
-              Text(
-                '日常',
-                style: SakuraTheme.display(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 5,
-                  color: SakuraColors.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Daily Bloom',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
-                  color: SakuraColors.ink,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'One task. One timer. One focus.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: SakuraColors.inkSoft,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-              Text(
-                'Start without an account. Add up to 3 tasks as a guest — '
-                'create a free account anytime to sync across devices.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.5,
-                  color: SakuraColors.inkFaint,
-                ),
-              ),
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: FilledButton.icon(
-                    onPressed: onGuest,
-                    icon: const Icon(Icons.person_outline, size: 18),
-                    label: const Text(
-                      'Continue as Guest',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+    final onGuest = widget.onGuest;
+    final onSignIn = widget.onSignIn;
+    return PetalRain(
+      child: Scaffold(
+        backgroundColor: SakuraColors.background,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 40),
+                Entrance(
+                  delayMs: 80,
+                  child: Text(
+                    '日常',
+                    style: SakuraTheme.display(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 5,
+                      color: SakuraColors.primary,
                     ),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: SakuraColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Entrance(
+                  delayMs: 160,
+                  child: Text(
+                    'Daily Bloom',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      color: SakuraColors.ink,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Entrance(
+                  delayMs: 220,
+                  child: Text(
+                    'One task. One timer. One focus.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: SakuraColors.inkSoft,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Entrance(
+                  delayMs: 300,
+                  child: Text(
+                    'Start without an account. Add up to 3 tasks as a guest — '
+                    'create a free account anytime to sync across devices.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: SakuraColors.inkFaint,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                Entrance(
+                  delayMs: 380,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Pressable(
+                        child: FilledButton.icon(
+                          onPressed: onGuest,
+                          icon: const Icon(Icons.person_outline, size: 18),
+                          label: const Text(
+                            'Continue as Guest',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: SakuraColors.primary,
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: OutlinedButton.icon(
-                    onPressed: onSignIn,
-                    icon: const Icon(Icons.login, size: 18),
-                    label: const Text(
-                      'Sign In',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: SakuraColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                const SizedBox(height: 14),
+                Entrance(
+                  delayMs: 440,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Pressable(
+                        child: OutlinedButton.icon(
+                          onPressed: onSignIn,
+                          icon: const Icon(Icons.login, size: 18),
+                          label: const Text(
+                            'Sign In',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: SakuraColors.primary,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            side: BorderSide(color: SakuraColors.primary),
+                          ),
+                        ),
                       ),
-                      side: BorderSide(color: SakuraColors.primary),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),

@@ -8,6 +8,7 @@ import '../data/simple_mode.dart';
 import '../game/gamification_state.dart';
 import '../screens/search_screen.dart';
 import '../theme/sakura_theme.dart';
+
 import 'currency_explainer.dart';
 import 'motion.dart';
 
@@ -199,6 +200,30 @@ class DailyBloomAppBar extends StatelessWidget
                     ),
                   ),
                 ],
+                GestureDetector(
+                  onTap: () {
+                    final id = ThemeStore.instance.themeId == 'midnight' ? 'edo' : 'midnight';
+                    ThemeStore.instance.equip(() async {}, id);
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: EdgeInsets.all(narrow ? 5 : 7),
+                    decoration: BoxDecoration(
+                      color: SakuraColors.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: SakuraColors.cardBorder),
+                    ),
+                    child: Tooltip(
+                      message: ThemeStore.instance.themeId == 'midnight' ? 'Switch to light mode' : 'Switch to dark mode',
+                      child: Icon(
+                        ThemeStore.instance.themeId == 'midnight' ? LucideIcons.sun : LucideIcons.moon,
+                        size: 14,
+                        color: SakuraColors.inkSoft,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: narrow ? 6 : 8),
                 if (onSettingsTap != null) ...[
                   SizedBox(width: narrow ? 6 : 8),
                   GestureDetector(

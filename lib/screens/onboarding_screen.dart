@@ -9,6 +9,7 @@ import '../data/simple_mode.dart';
 import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/motion.dart';
 
 /// First-launch onboarding — three calm slides that explain the loop
 /// (plant → complete → grow). Completion persists
@@ -94,7 +95,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final last = _page >= 3;
     return Scaffold(
       backgroundColor: SakuraColors.background,
-      body: SafeArea(
+      body: Entrance(
+        delayMs: 80,
+        child: SafeArea(
         child: Column(
           children: [
             Align(
@@ -195,6 +198,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
       ),
     );
   }

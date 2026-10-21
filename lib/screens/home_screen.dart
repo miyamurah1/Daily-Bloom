@@ -44,6 +44,7 @@ import 'focus_timer_screen.dart';
 import 'login_screen.dart';
 import 'review_screen.dart';
 import 'settings_screen.dart';
+import 'rules_screen.dart';
 import 'store_screen.dart';
 import 'task_detail_screen.dart';
 
@@ -481,6 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async {
+    AppHaptics.tap();
     try {
       final results = await Future.wait([
         _api.fetchHeatmapFull(weeks: 12),
@@ -1603,6 +1605,35 @@ class _HomeScreenState extends State<HomeScreen> {
     await SharePlus.instance.share(ShareParams(text: text, subject: 'My Daily Bloom garden'));
   }
 
+  Widget _guestBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: SakuraColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: SakuraColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.user, size: 16, color: SakuraColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Guest mode - data stored locally. Create an account to sync.',
+              style: TextStyle(fontSize: 12, color: SakuraColors.inkSoft),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+            ),
+            child: const Text('Sign in', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _shutdownButton() {
     return SizedBox(
       width: double.infinity,
@@ -1743,6 +1774,13 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(child: SyncBanner(live: _live, note: _note)),
+          if (TaskRepository.instance.guestMode)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: _guestBanner(),
+              ),
+            ),
           if (_conceptVisible)
             SliverToBoxAdapter(
               child: Padding(
@@ -1755,26 +1793,6 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
               child: Container(key: _intentionKey, child: _bentoHeader()),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          // Today's Flow: the work, right under the header.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                key: _flowKey,
-                child: TaskFlowList(
-                  todo: _todo,
-                  progress: _prog,
-                  done: _done,
-                  onTap: _complete,
-                  onOpen: _openDetail,
-                  onToggleSub: _toggleSub,
-                  onTimer: _openTimer,
-                  heroPrefix: 'home-focus-',
-                ),
-              ),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 12)),
@@ -1818,22 +1836,105 @@ class _HomeScreenState extends State<HomeScreen> {
               child: _miniHud(),
             ),
           ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          // Your proof: the heatmap (visible in all modes).
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _collapsibleHeat(),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          // Quick links: doors to review (visible in all modes).
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, i) => Padding(
+                key: ValueKey('home_quick_link_$i'),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: QuickLinks.rowItem(i, context),
+              ),
+              childCount: QuickLinks.rowCount,
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          // Today's Flow: the work, at the bottom.
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                key: _flowKey,
+                child: TaskFlowList(
+                  todo: _todo,
+                  progress: _prog,
+                  done: _done,
+                  onTap: _complete,
+                  onOpen: _openDetail,
+                  onToggleSub: _toggleSub,
+                  onTimer: _openTimer,
+                  heroPrefix: 'home-focus-',
+                ),
+              ),
+            ),
+          ),
           // Advanced-only surfaces (Simple Mode hides these).
           if (!SimpleMode.instance.enabled) ...[
             const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            // Flow & automations — advanced surface.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    SakuraPageRoute(builder: (_) => const RulesScreen()),
+                  ),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: SakuraTheme.cardDecoration(),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: SakuraColors.primary.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(LucideIcons.workflow,
+                              size: 15, color: SakuraColors.primary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Flow & automations',
+                                style: TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Automate task flows, reminders and reviews.',
+                                style: TextStyle(
+                                    fontSize: 12, color: SakuraColors.inkSoft),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(LucideIcons.chevronRight,
+                            size: 16, color: SakuraColors.inkFaint),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
             // Plan: the day's planner.
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _plannerCard(),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            // Evidence: collapsed until asked for.
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _collapsibleHeat(),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
@@ -1845,16 +1946,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) => Padding(
-                  key: ValueKey('home_quick_link_$i'),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: QuickLinks.rowItem(i, context),
-                ),
-                childCount: QuickLinks.rowCount,
-              ),
-            ),
           ],
           if (_showGuide)
             SliverToBoxAdapter(
@@ -1883,6 +1974,11 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SyncBanner(live: _live, note: _note),
+            if (TaskRepository.instance.guestMode)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                child: _guestBanner(),
+              ),
             if (_conceptVisible)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -1891,23 +1987,6 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
               child: Container(key: _intentionKey, child: _bentoHeader()),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                key: _flowKey,
-                child: TaskFlowList(
-                  todo: _todo,
-                  progress: _prog,
-                  done: _done,
-                  onTap: _complete,
-                  onOpen: _openDetail,
-                  onToggleSub: _toggleSub,
-                  onTimer: _openTimer,
-                  heroPrefix: 'home-focus-',
-                ),
-              ),
             ),
             const SizedBox(height: 12),
             Padding(
@@ -1941,16 +2020,37 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _miniHud(),
             ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _collapsibleHeat(),
+            ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: QuickLinks(key: ValueKey('home_quick_links'))),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                key: _flowKey,
+                child: TaskFlowList(
+                  todo: _todo,
+                  progress: _prog,
+                  done: _done,
+                  onTap: _complete,
+                  onOpen: _openDetail,
+                  onToggleSub: _toggleSub,
+                  onTimer: _openTimer,
+                  heroPrefix: 'home-focus-',
+                ),
+              ),
+            ),
             if (!SimpleMode.instance.enabled) ...[
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _plannerCard(),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _collapsibleHeat(),
               ),
               const SizedBox(height: 8),
               if (_streakAtRisk)
@@ -1959,10 +2059,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: _streakRiskCard(),
                 ),
               const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: QuickLinks(key: ValueKey('home_quick_links')),
-              ),
             ],
             if (_showGuide)
               Padding(

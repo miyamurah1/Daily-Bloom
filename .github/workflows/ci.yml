@@ -36,6 +36,7 @@ jobs:
         env:
           DATABASE_URL: postgres://bloom:bloom_ci_password@localhost:5433/daily_bloom
           NODE_ENV: test
+          ENABLE_TEST_BYPASS: '1'
           TEST_BYPASS_TOKEN: ci-local-secret
       - run: |
           (npm start &)
@@ -46,6 +47,7 @@ jobs:
         env:
           DATABASE_URL: postgres://bloom:bloom_ci_password@localhost:5433/daily_bloom
           NODE_ENV: test
+          ENABLE_TEST_BYPASS: '1'
           TEST_BYPASS_TOKEN: ci-local-secret
 
   flutter:

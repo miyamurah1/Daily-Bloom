@@ -6,6 +6,7 @@ import '../game/bloom_game_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/bloom_dialog.dart';
+import '../widgets/motion.dart';
 
 /// Icon choices shared by the habit + goal sheets.
 const _habitIcons = [
@@ -48,7 +49,9 @@ class _HabitsScreenState extends State<HabitsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: SakuraColors.background,
-      body: SafeArea(
+      body: Entrance(
+        delayMs: 80,
+        child: SafeArea(
         bottom: false,
         child: ListenableBuilder(
           listenable: _store,
@@ -83,6 +86,7 @@ class _HabitsScreenState extends State<HabitsScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }
