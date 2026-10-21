@@ -102,13 +102,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             Align(
               alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: () => _finish(personalize: false),
-                child: Text(
-                  'Skip',
-                  style: TextStyle(color: SakuraColors.inkSoft),
-                ),
-              ),
+              child: _page < 3
+                  ? TextButton(
+                      onPressed: () => _finish(personalize: false),
+                      child: Text(
+                        'Skip',
+                        style: TextStyle(color: SakuraColors.inkSoft),
+                      ),
+                    )
+                  : const SizedBox(height: 40),
             ),
             Expanded(
               child: PageView(
@@ -138,8 +140,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     focusIndex: _focusIndex,
                     reminderOn: _wantReminder,
                     simpleOn: _simpleMode,
-                    onName: (v) => _name = v,
-                    onFirstTask: (v) => _firstTask = v,
+                    onName: (v) => setState(() => _name = v),
+                    onFirstTask: (v) => setState(() => _firstTask = v),
                     onFocus: (i) => setState(() => _focusIndex = i),
                     onReminder: (v) => setState(() => _wantReminder = v),
                     onSimple: (v) => setState(() => _simpleMode = v),
@@ -186,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: _next,
+                    onPressed: (last && _name.trim().isEmpty) ? null : _next,
                     child: Text(
                       last ? 'Enter my garden' : 'Next',
                       style: const TextStyle(fontWeight: FontWeight.w800),

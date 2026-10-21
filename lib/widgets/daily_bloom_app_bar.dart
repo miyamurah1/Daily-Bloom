@@ -166,7 +166,7 @@ class DailyBloomAppBar extends StatelessWidget
                           onTap: onStoreTap,
                           child: _Pill(
                             child: Text(
-                              'STORE',
+                              'THEMES',
                               style: TextStyle(
                                 fontSize: 11,
                                 letterSpacing: 1.6,

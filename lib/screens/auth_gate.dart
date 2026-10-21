@@ -8,6 +8,7 @@ import '../data/haptics.dart';
 import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../game/dynamic_bloom_background.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
 import 'app_shell.dart';
@@ -251,10 +252,17 @@ class WelcomeGate extends StatefulWidget {
   State<WelcomeGate> createState() => _WelcomeGateState();
 }
 
-class _WelcomeGateState extends State<WelcomeGate> {
+class _WelcomeGateState extends State<WelcomeGate>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bgCtrl;
+
   @override
   void initState() {
     super.initState();
+    _bgCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat();
     // A single welcome tick as the cascade begins — keeps the haptic
     // language in sync with the entrance animation.
     AppHaptics.select();
@@ -265,17 +273,56 @@ class _WelcomeGateState extends State<WelcomeGate> {
   }
 
   @override
+  void dispose() {
+    _bgCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final onGuest = widget.onGuest;
     final onSignIn = widget.onSignIn;
-    return PetalRain(
+    return DynamicBloomBackground(
+      streak: 0,
       child: Scaffold(
         backgroundColor: SakuraColors.background,
-        body: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _bgCtrl,
+                builder: (context, _) {
+                  final reduce =
+                      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                  if (reduce && _bgCtrl.isAnimating) {
+                    _bgCtrl.stop();
+                  } else if (!reduce && !_bgCtrl.isAnimating) {
+                    _bgCtrl.repeat();
+                  }
+                  final t = reduce ? 0.0 : _bgCtrl.value;
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color.lerp(SakuraColors.background,
+                              SakuraColors.surface, 0.6 + 0.2 * t)!,
+                          Color.lerp(SakuraColors.surface,
+                              SakuraColors.background, 0.4 + 0.2 * t)!,
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            PetalRain(
+              child: SafeArea(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 const SizedBox(height: 40),
                 Entrance(
                   delayMs: 80,
@@ -395,6 +442,9 @@ class _WelcomeGateState extends State<WelcomeGate> {
           ),
         ),
       ),
-    );
+      ],
+    ),
+  ),
+  );
   }
 }

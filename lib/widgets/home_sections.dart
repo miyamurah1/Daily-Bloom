@@ -10,6 +10,7 @@ import '../screens/history_screen.dart';
 import '../screens/insights_screen.dart';
 import '../screens/matrix_screen.dart';
 import '../screens/review_screen.dart';
+import '../screens/store_screen.dart';
 import '../theme/sakura_theme.dart';
 
 /// Live/offline sync pill + offline note. Pure presentational extract.
@@ -99,13 +100,20 @@ class QuickLinks extends StatelessWidget {
   const QuickLinks({super.key});
 
   /// Door count — Simple mode drops the power door (Board).
-  static int get rowCount => SimpleMode.instance.enabled ? 3 : 4;
+  static int get rowCount => SimpleMode.instance.enabled ? 4 : 5;
 
   /// Single row item for the mobile [SliverList].
   static Widget rowItem(int index, BuildContext context) {
     // One style for all four: all caps, single trailing arrow.
     // Simple mode reindexes: Board is the power tool that goes first.
     final i = SimpleMode.instance.enabled ? index + 1 : index;
+    if (i == 4) {
+      return _link(context, 'THEME STORE \u2192', () {
+        Navigator.of(context).push(
+          SakuraPageRoute(builder: (_) => const StoreScreen()),
+        );
+      });
+    }
     switch (i) {
       case 0:
         return _link(context, 'BOARD →', () {

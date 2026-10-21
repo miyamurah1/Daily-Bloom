@@ -1837,14 +1837,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          // Your proof: the heatmap (visible in all modes).
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _collapsibleHeat(),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
           // Quick links: doors to review (visible in all modes).
           SliverList(
             delegate: SliverChildBuilderDelegate(
@@ -1874,6 +1866,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   heroPrefix: 'home-focus-',
                 ),
               ),
+            ),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          // Your proof: the heatmap (visible in all modes).
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _collapsibleHeat(),
             ),
           ),
           // Advanced-only surfaces (Simple Mode hides these).
@@ -2021,11 +2021,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: _miniHud(),
             ),
             const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _collapsibleHeat(),
-            ),
-            const SizedBox(height: 8),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: QuickLinks(key: ValueKey('home_quick_links'))),
@@ -2045,6 +2040,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   heroPrefix: 'home-focus-',
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _collapsibleHeat(),
             ),
             if (!SimpleMode.instance.enabled) ...[
               const SizedBox(height: 12),
