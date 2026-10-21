@@ -26,7 +26,7 @@ class AuthUser {
     required this.email,
     this.displayName = '',
     this.avatarLabel = '禅',
-    this.activeTheme = 'midnight',
+    this.activeTheme = 'edo',
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
@@ -34,7 +34,7 @@ class AuthUser {
         email: '${j['email']}',
         displayName: '${j['display_name'] ?? ''}',
         avatarLabel: '${j['avatar_label'] ?? '禅'}',
-        activeTheme: '${j['active_theme'] ?? 'midnight'}',
+        activeTheme: '${j['active_theme'] ?? 'edo'}',
       );
 
   Map<String, dynamic> toJson() => {

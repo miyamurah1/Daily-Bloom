@@ -262,15 +262,15 @@ class ThemeStore extends ChangeNotifier {
   ThemeStore._();
   static final ThemeStore instance = ThemeStore._();
 
-  String themeId = 'midnight';
+  String themeId = 'edo';
 
   /// Before runApp: paint the last-used theme with zero flash.
   Future<void> preload() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _apply(prefs.getString(_kTheme) ?? 'midnight', notify: false);
+      _apply(prefs.getString(_kTheme) ?? 'edo', notify: false);
     } catch (_) {
-      _apply('midnight', notify: false);
+      _apply('edo', notify: false);
     }
   }
 
@@ -303,7 +303,7 @@ class ThemeStore extends ChangeNotifier {
   void resetToDefault() {
     _previewTimer?.cancel();
     _previewRestore = null;
-    _apply('midnight', notify: true);
+    _apply('edo', notify: true);
     SharedPreferences.getInstance()
         .then((p) => p.setString(_kTheme, themeId))
         .catchError((_) => false);

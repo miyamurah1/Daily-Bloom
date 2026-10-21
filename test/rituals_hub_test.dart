@@ -133,13 +133,13 @@ void main() {
     await pumpShell(tester);
     await tapNav(tester, 'Insights');
     expect(find.byType(InsightsScreen), findsOneWidget);
-    expect(bgOf<InsightsScreen>(tester), AppThemes.midnight.background);
+    expect(bgOf<InsightsScreen>(tester), AppThemes.sakura.background);
 
-    await ThemeStore.instance.equip(() async {}, 'edo');
+    await ThemeStore.instance.equip(() async {}, 'midnight');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(bgOf<InsightsScreen>(tester), AppThemes.byId('edo').background,
+    expect(bgOf<InsightsScreen>(tester), AppThemes.byId('midnight').background,
         reason: 'the section must repaint on a theme swap');
     ThemeStore.instance.resetToDefault();
   });
@@ -149,13 +149,13 @@ void main() {
     await pumpShell(tester);
     await tapNav(tester, 'Habits');
     expect(find.byType(HabitsScreen), findsOneWidget);
-    expect(bgOf<HabitsScreen>(tester), AppThemes.midnight.background);
+    expect(bgOf<HabitsScreen>(tester), AppThemes.sakura.background);
 
-    await ThemeStore.instance.equip(() async {}, 'edo');
+    await ThemeStore.instance.equip(() async {}, 'midnight');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(bgOf<HabitsScreen>(tester), AppThemes.byId('edo').background,
+    expect(bgOf<HabitsScreen>(tester), AppThemes.byId('midnight').background,
         reason: 'the section must repaint on a theme swap');
     ThemeStore.instance.resetToDefault();
   });

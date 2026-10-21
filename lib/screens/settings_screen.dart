@@ -22,6 +22,7 @@ import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../game/game.dart';
 
+import '../screens/store_screen.dart';
 import '../theme/sakura_theme.dart';
 
 
@@ -1075,6 +1076,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 Switch(
                   value: ThemeStore.instance.themeId == 'midnight',
                   onChanged: (v) {
@@ -1084,6 +1086,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeThumbColor: SakuraColors.primary,
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: () => Navigator.of(context).push(
+              SakuraPageRoute(builder: (_) => const StoreScreen()),
+            ),
+            child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: SakuraColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(LucideIcons.shoppingBag,
+                      size: 15, color: SakuraColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Theme Store',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: SakuraColors.ink),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Spend earned tokens on new themes and re-skin the app.',
+                        style: TextStyle(
+                            fontSize: 12, color: SakuraColors.inkSoft),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(LucideIcons.chevronRight,
+                    size: 16, color: SakuraColors.inkFaint),
+              ],
+            ),
             ),
           ),
           const SizedBox(height: 14),

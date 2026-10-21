@@ -47,7 +47,7 @@ app.get('/api/store', requireAuth, async (req, res) => {
       'SELECT balance FROM user_tokens WHERE user_id = $1', [req.userId]);
     res.json({
       balance: wallet.length ? wallet[0].balance : 450,
-      active: me.length ? me[0].active_theme : 'midnight',
+      active: me.length ? me[0].active_theme : 'edo',
       themes: Object.values(THEMES).map((t) => ({
         ...t,
         owned: have.has(t.id),

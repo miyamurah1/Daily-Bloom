@@ -13,4 +13,4 @@ ON CONFLICT DO NOTHING;
 
 -- New users default to the dark baseline when no theme is chosen.
 ALTER TABLE users
-  ALTER COLUMN active_theme SET DEFAULT 'midnight';
+  ALTER COLUMN active_theme SET DEFAULT 'edo';
