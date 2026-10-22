@@ -19,16 +19,24 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// Force a consistent JVM target across the app and all plugin modules.
-// Some plugins (e.g. receive_sharing_intent 1.8.x) default to Java 11
-// while the app compiles with Java 17, which Gradle rejects.
-subprojects {
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
-    }
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+// Force a consistent JVM target (Java 17) for the app and every plugin module.
+// Plugins such as home_widget and receive_sharing_intent declare Java 1.8 / 11
+// in their own build scripts, which clashes with the app's Java 17 and makes
+// Gradle fail with "Inconsistent JVM Target Compatibility Between Java and
+// Kotlin Tasks".
+//
+// `gradle.projectsEvaluated` runs after every project (and after AGP's own
+// afterEvaluate callbacks, which re-create the compile tasks), so the values
+// set here are the last ones applied and therefore win.
+gradle.projectsEvaluated {
+    allprojects { p ->
+        p.tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
+        }
+        p.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
 }
 
