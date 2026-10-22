@@ -29,12 +29,12 @@ subprojects {
 // afterEvaluate callbacks, which re-create the compile tasks), so the values
 // set here are the last ones applied and therefore win.
 gradle.projectsEvaluated {
-    allprojects { p ->
-        p.tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+    rootProject.allprojects.forEach { sub ->
+        sub.tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
             sourceCompatibility = "17"
             targetCompatibility = "17"
         }
-        p.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        sub.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
             compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
