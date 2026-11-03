@@ -10,6 +10,7 @@ import 'mock_data.dart';
 import 'reminders.dart';
 import 'session_sound.dart';
 import '../game/first_week_arc.dart';
+import '../game/gamification_state.dart';
 
 /// mm:ss for the countdown pills.
 String formatCountdown(Duration d) {
@@ -203,6 +204,7 @@ class FocusController extends ChangeNotifier {
     // and manual Finish both land here. Abandon stays silent on purpose.
     unawaited(SessionSound.chime());
     if (wasFocus) {
+      GamificationStateNotifier.instance.markDailyActive();
       // The garden's core loop: a finished focus session counts as the
       // first-week arc's "focus" milestone and a product event.
       BloomAnalytics.focusCompleted(minutes: actual);

@@ -26,6 +26,7 @@ import 'motion.dart';
 class DailyIntentionCard extends StatefulWidget {
   final DailyIntentionNotifier? intention;
   final VoidCallback? onTargetMet;
+  final Future<void> Function()? onTargetMetAsync;
 
   /// Compact cell for the Home bento header (~70px): icon + title +
   /// progress + thin bar. Same gather/edit behaviour, smaller footprint.
@@ -35,6 +36,7 @@ class DailyIntentionCard extends StatefulWidget {
     super.key,
     this.intention,
     this.onTargetMet,
+    this.onTargetMetAsync,
     this.compact = false,
   });
 
@@ -133,11 +135,21 @@ class _DailyIntentionCardState extends State<DailyIntentionCard> {
     _syncPinned();
   }
 
-  void _gather() {
+  Future<void> _gather() async {
     if (!mounted) return;
     if (!_game.met || _gatheredKey == _game.dayKey) return;
     _gatheredKey = _game.dayKey;
-    widget.onTargetMet?.call();
+    try {
+      if (widget.onTargetMetAsync != null) {
+        await widget.onTargetMetAsync!();
+      } else {
+        widget.onTargetMet?.call();
+      }
+    } catch (_) {
+      // A server-backed reward can fail while the intention is still met.
+      // Clear the guard so the user can retry after reconnecting.
+      if (mounted) _gatheredKey = null;
+    }
   }
 
   Future<void> _customize() async {

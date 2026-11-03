@@ -34,6 +34,7 @@ export function isDatabaseOffline(err) {
 
 export function createRequireAuth(pool) {
 const testBypass =
+  process.env.NODE_ENV === 'test' &&
   process.env.ENABLE_TEST_BYPASS === '1' && process.env.TEST_BYPASS_TOKEN
     ? process.env.TEST_BYPASS_TOKEN
     : null;

@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_client.dart';
+import 'auth_store.dart';
 import '../game/gamification_state.dart';
 
 /// A long-term aspiration habits attach to.
@@ -333,7 +335,10 @@ class HabitStore extends ChangeNotifier {
     _habits = [for (final h in _habits) if (h.id == id && !h.counted) (() { final next = {...h.log}; if ((next[day] ?? 0) >= 1) { next.remove(day); result = false; } else { next[day] = 1; result = true; } return h.copyWith(log: trim(next)); })() else h];
     notifyListeners();
     await persist();
-    if (result) BloomAnalytics.habitCheckin();
+     if (result) {
+       BloomAnalytics.habitCheckin();
+       GamificationStateNotifier.instance.markDailyActive();
+     }
     return result;
   }
   Future<num> logToday(String id, num delta, [DateTime? now]) async {
@@ -341,8 +346,9 @@ class HabitStore extends ChangeNotifier {
     num result = 0;
     _habits = [for (final h in _habits) if (h.id == id && h.counted) (() { final next = {...h.log}; final v = (next[day] ?? 0) + delta; if (v <= 0) { next.remove(day); result = 0; } else { next[day] = v; result = v; } return h.copyWith(log: trim(next)); })() else h];
     notifyListeners();
-    await persist();
-    return result;
+     await persist();
+     if (result > 0) GamificationStateNotifier.instance.markDailyActive();
+     return result;
   }
   Future<Habit?> removeHabit(String id) async {
     Habit? removed;
@@ -374,8 +380,19 @@ class HabitStore extends ChangeNotifier {
   Future<bool> unfreezeHabit(String id) async {
     final h = habitById(id);
     if (h == null || !h.frozen) return false;
-    final paid = GamificationStateNotifier.instance.spendTokens(unfreezeTokens);
-    if (!paid) return false;
+    if (AuthStore.instance.user != null) {
+      try {
+        final result = await BloomApi().spendWallet(
+          action: 'habit_unfreeze',
+          idempotencyKey: 'habit-unfreeze:$id:${h.frozenStreak}',
+        );
+        GamificationStateNotifier.instance.syncServerTokens(result.balance);
+      } catch (_) {
+        return false;
+      }
+    } else if (!GamificationStateNotifier.instance.spendTokens(unfreezeTokens)) {
+      return false;
+    }
     _habits = [for (final x in _habits) if (x.id == id) x.copyWith(frozen: false, frozenStreak: 0) else x];
     notifyListeners();
     await persist();

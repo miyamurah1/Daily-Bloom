@@ -22,6 +22,7 @@ const accountScopedKeys = <String>[
   // Tasks + offline outbox (owned by TaskRepository, removed again in
   // clearForAccountSwitch — listed here so the inventory stays complete).
   'bloom_tasks_cache_v2',
+  'bloom_local_schema_v2',
   'bloom_outbox_v1',
   'bloom_outbox_dead_v1',
   // Rituals + project goals.
@@ -33,6 +34,8 @@ const accountScopedKeys = <String>[
   'bloom_game_xp',
   'bloom_game_tokens',
   'bloom_game_streak',
+  'bloom_game_grace_month',
+  'bloom_game_grace_used',
   'bloom_game_last_day',
   'bloom_game_stake_day',
   'bloom_game_stake_ids',
@@ -42,6 +45,8 @@ const accountScopedKeys = <String>[
   'bloom_game_done_day',
   'bloom_game_done_count',
   'bloom_game_nudged_day',
+  'bloom_game_task_gains_v1',
+  'bloom_game_ritual_day',
   'bloom_eco_total_earned',
   'bloom_eco_total_spent',
   // Onboarding + one-shot UI flags (new account replays the intro).
@@ -92,7 +97,7 @@ Future<void> clearAccountData() async {
     await TokenEconomyManager.instance.load();
   } catch (_) {}
   try {
-    GamificationStateNotifier.instance.resetForNewAccount();
+    await GamificationStateNotifier.instance.resetForNewAccount();
   } catch (_) {}
   try {
     await FirstWeekArc.instance.resetForNewAccount();

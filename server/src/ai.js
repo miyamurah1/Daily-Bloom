@@ -23,6 +23,22 @@ export function checkCap(userId) {
   return true;
 }
 
+/// Persistent equivalent used by the API. The in-memory function above stays
+/// available for pure local-heuristic tests and development helpers.
+export async function checkPersistentCap(pool, userId) {
+  const limit = Number.isFinite(DAILY_CAP) && DAILY_CAP > 0 ? DAILY_CAP : 50;
+  const { rows } = await pool.query(
+    `INSERT INTO ai_usage (user_id, day, calls)
+     VALUES ($1, CURRENT_DATE, 1)
+     ON CONFLICT (user_id, day) DO UPDATE
+       SET calls = ai_usage.calls + 1, updated_at = now()
+       WHERE ai_usage.calls < $2
+     RETURNING calls`,
+    [userId, limit],
+  );
+  return rows.length > 0;
+}
+
 export function resetCaps() {
   usageByUserDay.clear();
 }

@@ -88,6 +88,7 @@ class _TaskCardState extends State<TaskCard> {
 
   @override
   Widget build(BuildContext context) {
+    final avatar = widget.task.avatarLabel.trim();
     final overdue = widget.task.dueAt != null &&
         widget.task.dueAt!.isBefore(DateTime.now()) &&
         widget.task.status != 'done';
@@ -209,8 +210,8 @@ class _TaskCardState extends State<TaskCard> {
                 CircleAvatar(
                   radius: 13,
                   backgroundColor: SakuraColors.primarySoft,
-                  child: Text(
-                    widget.task.avatarLabel.characters.first,
+                 child: Text(
+                    (avatar.isEmpty ? '禅' : avatar).characters.first,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,

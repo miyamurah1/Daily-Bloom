@@ -483,6 +483,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     AppHaptics.tap();
+    // Guest/offline: render cached tasks instantly instead of touching the
+    // backend or Firebase identity (which isn't initialised under tests).
+    if (AuthStore.instance.user == null) {
+      await TaskRepository.instance.loadRemote(withDetails: true);
+      if (!mounted) return;
+      setState(() {
+        _todo = TaskRepository.instance.todayTasks;
+        _prog = TaskRepository.instance.inProgressTasks;
+        _done = TaskRepository.instance.doneTasks;
+        _heat = _heat.isEmpty ? _zeroHeat() : _heat;
+        _live = false;
+        _note = 'Offline — showing your saved tasks.';
+      });
+      return;
+    }
     try {
       final results = await Future.wait([
         _api.fetchHeatmapFull(weeks: 12),
@@ -491,6 +506,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
       if (!mounted) return;
       final progress = results[1] as Map<String, int>;
+      GamificationStateNotifier.instance
+          .syncServerTokens(results[2] as int);
       setState(() {
         _heat = (results[0] as List<HeatDay>);
         _bestStreak = progress['bestStreak'] ?? 0;
@@ -524,28 +541,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _complete(Task t) async {
-    // Local game juice first — works offline so combo is always visible.
-    // XP moves only with the transition: completing grants, reopening
-    // revokes (anti-farm — done → undo → done must not mint XP).
+    // XP moves with the shared repository transition, so every completion
+    // surface uses the same ledger and offline behavior.
     final game = GamificationStateNotifier.instance;
     final levelBefore = game.level;
     final next = nextStatus(t);
     if (next == 'done') {
-      game.registerTaskCompletion(taskId: t.id);
       // Done celebration: double-pulse haptic + soft blip.
       AppHaptics.bloom();
       TapSound.tap();
     } else {
-      game.revokeTaskCompletion(taskId: t.id);
       AppHaptics.tap();
-    }
-    // Level crossing → one-shot burst + fanfare (no dialog stacks).
-    if (game.level > levelBefore && mounted) {
-      LevelUpBurst.celebrate(context, game);
     }
     // Repository move is optimistic + persisted: the board updates at
     // 0ms and survives offline. No "start the backend" dead-end.
     await TaskRepository.instance.moveTask(t.id, next);
+    // Every completion surface uses the repository transition, so the level
+    // check happens after the shared reward ledger updates.
+    if (game.level > levelBefore && mounted) {
+      LevelUpBurst.celebrate(context, game);
+    }
     _syncPlanWidget(); // widget ✓ flags stay truthful
     if (mounted) {
       showBloomSnackBar(
@@ -1128,13 +1143,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _claimBloom() {
+  Future<void> _claimBloom() async {
     // Gather thump: the reward moment gets the heavier buzz.
     AppHaptics.confirm();
     TapSound.tap();
-    GamificationStateNotifier.instance.claimDailyRitual();
+    if (AuthStore.instance.user != null) {
+      try {
+        final result = await _api.claimDailyRitual();
+        GamificationStateNotifier.instance.syncServerTokens(result.balance);
+        if (result.alreadyApplied) {
+          if (mounted) showBloomSnackBar(context, 'Today\'s bloom is already claimed.');
+          return;
+        }
+      } catch (e) {
+        if (!mounted) return;
+        showBloomSnackBar(context, 'Connect to claim today\'s bloom.');
+        rethrow;
+      }
+    } else {
+      final claimed = GamificationStateNotifier.instance.claimDailyRitual();
+      if (!claimed) {
+        if (mounted) showBloomSnackBar(context, 'Today\'s bloom is already claimed.');
+        return;
+      }
+    }
     // Loot box removed: rewards land directly, no mystery roll.
-    showBloomSnackBar(context, 'Bloom claimed 🌱');
+    if (mounted) showBloomSnackBar(context, 'Bloom claimed 🌱');
   }
 
   void _jumpToSection(int index) {
@@ -1251,7 +1285,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               DailyIntentionCard(
                 compact: true,
-                onTargetMet: _claimBloom,
+                onTargetMetAsync: _claimBloom,
               ),
               const SizedBox(height: 10),
               GameHud(onBloom: _claimBloom),
@@ -1271,7 +1305,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 flex: 5,
                 child: DailyIntentionCard(
                   compact: true,
-                  onTargetMet: _claimBloom,
+                    onTargetMetAsync: _claimBloom,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1283,6 +1317,28 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// The primary action belongs near the top of Today. Supporting surfaces
+  /// such as streaks, sharing, links, and the heatmap follow the work instead
+  /// of making users scroll past them before they can act.
+  Widget _todayFlowBlock() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        key: _flowKey,
+        child: TaskFlowList(
+          todo: _todo,
+          progress: _prog,
+          done: _done,
+          onTap: _complete,
+          onOpen: _openDetail,
+          onToggleSub: _toggleSub,
+          onTimer: _openTimer,
+          heroPrefix: 'home-focus-',
+        ),
+      ),
     );
   }
 
@@ -1789,14 +1845,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           // Zen Bento header: greeting + seedling.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: Container(key: _intentionKey, child: _bentoHeader()),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          // First-week arc: shows in both modes (first-week guide, not power tool).
+           SliverToBoxAdapter(
+             child: Padding(
+               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+               child: Container(key: _intentionKey, child: _bentoHeader()),
+             ),
+           ),
+           const SliverToBoxAdapter(child: SizedBox(height: 12)),
+           SliverToBoxAdapter(child: _todayFlowBlock()),
+           const SliverToBoxAdapter(child: SizedBox(height: 12)),
+           // First-week arc: shows in both modes (first-week guide, not power tool).
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1849,27 +1907,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          // Today's Flow: the work, at the bottom.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                key: _flowKey,
-                child: TaskFlowList(
-                  todo: _todo,
-                  progress: _prog,
-                  done: _done,
-                  onTap: _complete,
-                  onOpen: _openDetail,
-                  onToggleSub: _toggleSub,
-                  onTimer: _openTimer,
-                  heroPrefix: 'home-focus-',
-                ),
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          // Your proof: the heatmap (visible in all modes).
+           // Your proof: the heatmap (visible in all modes).
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1989,6 +2027,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Container(key: _intentionKey, child: _bentoHeader()),
             ),
             const SizedBox(height: 12),
+            _todayFlowBlock(),
+            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _arcRow(),
@@ -2024,23 +2064,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: QuickLinks(key: ValueKey('home_quick_links'))),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                key: _flowKey,
-                child: TaskFlowList(
-                  todo: _todo,
-                  progress: _prog,
-                  done: _done,
-                  onTap: _complete,
-                  onOpen: _openDetail,
-                  onToggleSub: _toggleSub,
-                  onTimer: _openTimer,
-                  heroPrefix: 'home-focus-',
-                ),
-              ),
-            ),
             const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -6,6 +6,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/focus_controller.dart';
 import '../data/haptics.dart';
+import '../data/auth_store.dart';
 import '../data/mock_data.dart';
 import '../data/plan_widget.dart';
 import '../data/reminders.dart';
@@ -312,8 +313,12 @@ class _AppShellState extends State<AppShell>
     return ListenableBuilder(
       listenable: ThemeStore.instance,
       builder: (context, _) {
-        final body = Column(
-          children: [
+        final body = ListenableBuilder(
+          listenable: AuthStore.instance,
+          builder: (context, _) => Column(
+            children: [
+              if (AuthStore.instance.needsEmailVerification)
+                const _EmailVerificationBanner(),
             Expanded(
               child: IndexedStack(
                 index: _index,
@@ -339,7 +344,8 @@ class _AppShellState extends State<AppShell>
                 ),
               ),
             ),
-          ],
+            ],
+          ),
         );
         // Hoisted OUT of the game listener: on an XP tick the builder
         // only creates a fresh DynamicBloomBackground — Scaffold and nav
@@ -382,6 +388,83 @@ class _AppShellState extends State<AppShell>
           ),
         );
       },
+    );
+  }
+}
+
+class _EmailVerificationBanner extends StatefulWidget {
+  const _EmailVerificationBanner();
+
+  @override
+  State<_EmailVerificationBanner> createState() =>
+      _EmailVerificationBannerState();
+}
+
+class _EmailVerificationBannerState extends State<_EmailVerificationBanner> {
+  bool _busy = false;
+  String? _message;
+
+  Future<void> _send() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await AuthStore.instance.sendEmailVerification();
+      if (mounted) setState(() => _message = 'Verification email sent.');
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _message = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _check() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    final verified = await AuthStore.instance.refreshEmailVerification();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _message = verified
+            ? 'Email verified — thank you.'
+            : 'Not verified yet. Open the email, then check again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      container: true,
+      label: 'Email verification reminder',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+        color: SakuraColors.primary.withValues(alpha: 0.09),
+        child: Row(
+          children: [
+            Icon(LucideIcons.mail, size: 16, color: SakuraColors.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _message ?? 'Verify your email to keep your account secure.',
+                style: TextStyle(fontSize: 12, color: SakuraColors.ink),
+              ),
+            ),
+            TextButton(
+              onPressed: _busy ? null : _send,
+              child: const Text('Send again'),
+            ),
+            TextButton(
+              onPressed: _busy ? null : _check,
+              child: const Text('Check'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

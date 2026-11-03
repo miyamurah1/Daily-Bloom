@@ -11,8 +11,10 @@ services:
     buildCommand: npm install
     # `npm start` runs migrations first (scripts/migrate.js), then boots.
     startCommand: npm start
-    healthCheckPath: /health
+    healthCheckPath: /health/ready
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: DATABASE_URL
         sync: false
       # Firebase Admin SDK service-account JSON (single line).

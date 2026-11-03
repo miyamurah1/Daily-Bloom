@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
@@ -9,6 +10,8 @@ import '../data/session_sound.dart';
 import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/google_button.dart';
+import '../widgets/apple_button.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
 import 'signup_screen.dart';
@@ -29,15 +32,16 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscure = true;
   bool _busy = false;
   bool _googleBusy = false;
+  bool _appleBusy = false;
   String? _error;
+
+  bool get _appleAvailable =>
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
 
   @override
   void initState() {
     super.initState();
-    // Theme moment: the singing-bowl greets the login screen (soft) with
-    // one gentle buzz, so the screen feels alive from the first frame.
-    SessionSound.chime(volume: 0.6);
-    AppHaptics.tap();
     // The form remembers your last signed-in address.
     AuthStore.readLastEmail().then((address) {
       if (address != null &&
@@ -103,6 +107,27 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Google sign-in failed — try again.');
     } finally {
       if (mounted) setState(() => _googleBusy = false);
+    }
+  }
+
+  Future<void> _appleSignIn() async {
+    AppHaptics.tap();
+    await TapSound.tap();
+    setState(() {
+      _error = null;
+      _appleBusy = true;
+    });
+    try {
+      final signedIn = await AuthStore.instance.signInWithApple();
+      if (!signedIn) return;
+      SessionSound.chime();
+      await ThemeStore.instance.sync(() => BloomApi().fetchStore());
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Apple sign-in failed — try again.');
+    } finally {
+      if (mounted) setState(() => _appleBusy = false);
     }
   }
 
@@ -405,12 +430,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton.icon(
-                                onPressed: (_busy || _googleBusy)
+                                onPressed: (_busy || _googleBusy || _appleBusy)
                                     ? null
                                     : _forgotPassword,
                                 icon: Icon(LucideIcons.keyRound,
                                     size: 14,
-                                    color: (_busy || _googleBusy)
+                                    color: (_busy || _googleBusy || _appleBusy)
                                         ? SakuraColors.inkFaint
                                         : SakuraColors.primary),
                                 label: Text(
@@ -418,7 +443,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
-                                    color: (_busy || _googleBusy)
+                                    color: (_busy || _googleBusy || _appleBusy)
                                         ? SakuraColors.inkFaint
                                         : SakuraColors.primary,
                                   ),
@@ -451,7 +476,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             // Log in button
                             Pressable(
-                              enabled: !_busy && !_googleBusy,
+                               enabled: !_busy && !_googleBusy && !_appleBusy,
                               child: FilledButton(
                                 style: FilledButton.styleFrom(
                                   backgroundColor: SakuraColors.primary,
@@ -461,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       borderRadius:
                                           BorderRadius.circular(14)),
                                 ),
-                                onPressed: (_busy || _googleBusy)
+                                 onPressed: (_busy || _googleBusy || _appleBusy)
                                     ? null
                                     : _submit,
                                 child: _busy
@@ -501,11 +526,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 12),
 
                             // Google Sign-In button
-                            _GoogleButton(
+                            GoogleButton(
                               busy: _googleBusy,
-                              disabled: _busy,
-                              onTap: _googleSignIn,
-                            ),
+                               disabled: _busy || _appleBusy,
+                               onTap: _googleSignIn,
+                             ),
+                             if (_appleAvailable) ...[
+                               const SizedBox(height: 10),
+                               AppleButton(
+                                 busy: _appleBusy,
+                                 disabled: _busy || _googleBusy,
+                                 onTap: _appleSignIn,
+                               ),
+                             ],
                           ],
                         ),
                         ),
@@ -559,113 +592,3 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ── Google Sign-In button ──────────────────────────────────────────────────
-
-class _GoogleButton extends StatelessWidget {
-  final bool busy;
-  final bool disabled;
-  final VoidCallback onTap;
-
-  const _GoogleButton({
-    required this.busy,
-    required this.disabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: disabled ? 0.5 : 1.0,
-      child: InkWell(
-        onTap: (busy || disabled) ? null : onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 16),
-          decoration: BoxDecoration(
-            color: SakuraColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: SakuraColors.cardBorder, width: 1.5),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (busy)
-                const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else ...[
-                // Google "G" logo in brand colours
-                _GoogleLogo(),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    'Continue with Google',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: SakuraColors.ink,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GoogleLogo extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 20,
-      height: 20,
-      child: CustomPaint(painter: _GoogleLogoPainter()),
-    );
-  }
-}
-
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2;
-    final paint = Paint()..style = PaintingStyle.fill;
-
-    // Draw quadrant arcs in Google's brand colours.
-    // Blue (top-right)
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: r),
-        -1.5708, 1.5708, true, paint);
-    // Red (top-left)
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: r),
-        3.1416, 1.5708, true, paint);
-    // Yellow (bottom-left)
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: r),
-        1.5708, 1.5708, true, paint);
-    // Green (bottom-right)
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: r),
-        0, 1.5708, true, paint);
-
-    // White inner circle (the "G" cutout effect).
-    paint.color = Colors.white;
-    canvas.drawCircle(center, r * 0.58, paint);
-
-    // Blue "G" bar on the right side.
-    paint.color = const Color(0xFF4285F4);
-    final barRect = Rect.fromLTWH(
-        center.dx, center.dy - r * 0.22, r * 0.9, r * 0.44);
-    canvas.drawRect(barRect, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

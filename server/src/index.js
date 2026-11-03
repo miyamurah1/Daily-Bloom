@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
 import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'node:crypto';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { publicUser, createRequireAuth } from './lib/auth.js';
 import { logEvent, runRules, validRuleBody, THEMES } from './lib/engine.js';
@@ -77,6 +78,28 @@ const pool = new Pool({
 
 
 const app = express();
+// Every response carries a safe correlation id. Logs contain request shape
+// and timing only; task titles, tokens, and email addresses never enter logs.
+app.use((req, res, next) => {
+  const requestId = req.get('x-request-id') || randomUUID();
+  const started = Date.now();
+  res.setHeader('x-request-id', requestId);
+  res.on('finish', () => {
+    console.log(JSON.stringify({
+      event: 'http_request',
+      requestId,
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      durationMs: Date.now() - started,
+    }));
+  });
+  next();
+});
+// Render and other reverse proxies must be trusted so rate limiting uses the
+// real client address instead of treating every request as coming from the
+// proxy itself.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 // Web origins are allow-listed via CORS_ORIGIN (comma-separated). Native
 // apps, curl, and Postman send no Origin and always pass; browsers pass
 // only for listed origins in production. Outside production everything
@@ -96,8 +119,8 @@ app.use(cors({
 }));
 
 // Request body parsing (required for POST/PATCH route handlers)
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 
 // Optional crash reporting (Sentry). No SENTRY_DSN = zero behavior
@@ -147,10 +170,25 @@ app.get('/health', async (req, res) => {
     res.json({
       ok: true,
       firebaseReady,
-      firebaseCredentialSource,
     });
   } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
+    console.error('[health] database check failed:', e?.code ?? e?.message ?? e);
+    res.status(503).json({ ok: false, error: 'service unavailable' });
+  }
+});
+
+// Deployment readiness: unlike /health, this fails when authentication is not
+// configured. It intentionally returns no credential paths or database errors.
+app.get('/health/ready', async (req, res) => {
+  if (!firebaseReady) {
+    return res.status(503).json({ ok: false, error: 'authentication unavailable' });
+  }
+  try {
+    await pool.query('SELECT 1');
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error('[health] readiness check failed:', e?.code ?? e?.message ?? e);
+    return res.status(503).json({ ok: false, error: 'service unavailable' });
   }
 });
 
@@ -163,7 +201,7 @@ registerStoreRoutes(app, { pool, requireAuth, THEMES });
 registerFocusRoutes(app, { pool, requireAuth, logEvent, runRules });
 registerInsightRoutes(app, { pool, requireAuth, levelFor, streakStats });
 registerFolderRoutes(app, { pool, requireAuth });
-registerAiRoutes(app, { requireAuth });
+registerAiRoutes(app, { requireAuth, pool });
 
 
 const port = process.env.PORT || 8080;

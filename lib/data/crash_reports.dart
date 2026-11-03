@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 1. A DSN baked in at build time (`--dart-define=SENTRY_DSN=...`).
 ///    Open-source / local builds ship with an empty DSN: fully disabled,
 ///    zero network, zero behavior change.
-/// 2. The in-app Settings toggle (default on, persisted). Turning it off
+/// 2. The in-app Settings toggle (default off, persisted). Turning it off
 ///    stops all future reports; takes effect on next launch.
 ///
 /// No breadcrumbs with task content: only the exception, OS, and app
@@ -20,7 +20,7 @@ class CrashReports {
   static Future<bool> enabled() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_kKey) ?? true;
+      return prefs.getBool(_kKey) ?? false;
     } catch (_) {
       return true;
     }

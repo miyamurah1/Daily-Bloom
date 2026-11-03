@@ -30,6 +30,8 @@ dependencies:
   sentry_flutter: 10.0.0
   audioplayers: ^6.8.1
   receive_sharing_intent: 1.8.1
+  sign_in_with_apple: ^8.2.0
+  crypto: ^3.0.8
 
 dev_dependencies:
   flutter_test:
@@ -44,3 +46,4 @@ flutter:
     - assets/sounds/tap.wav
     - assets/sounds/rain.wav
     - assets/sounds/bgm.wav
+    - assets/logo.png

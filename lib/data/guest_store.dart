@@ -32,6 +32,7 @@ class GuestStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kGuestTasks);
+      _tasks = [];
       if (raw != null && raw.isNotEmpty) {
         _tasks = List<Map<String, dynamic>>.from(
           (jsonDecode(raw) as List).cast<Map<String, dynamic>>(),

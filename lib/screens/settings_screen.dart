@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
 import '../data/profile_name.dart';
+import '../data/privacy_preferences.dart';
 import '../data/background_music.dart';
 import '../data/calendar_export.dart';
 import '../data/crash_reports.dart';
@@ -28,6 +29,7 @@ import '../theme/sakura_theme.dart';
 import '../widgets/bloom_dialog.dart';
 import '../widgets/motion.dart';
 import '../widgets/profile_editor.dart';
+import '../widgets/trust_dialog.dart';
 
 String _taskIdentityKey(Task t) =>
     '${t.title.trim().toLowerCase()}|${t.folder.trim().toLowerCase()}|${t.tag.trim().toLowerCase()}|${t.dueAt?.toIso8601String() ?? ''}';
@@ -51,7 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _reminderHour = ReminderService.instance.hour;
   bool _weeklyOn = false;
   bool _simpleOn = false;
-  bool _crashOn = true;
+  bool _crashOn = false;
+  bool _aiOn = false;
   bool _tapSoundOn = true;
   bool _bgmOn = false;
 
@@ -81,6 +84,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     CrashReports.enabled().then((v) {
       if (mounted) setState(() => _crashOn = v);
+    });
+    PrivacyPreferences.instance.load().then((_) {
+      if (mounted) {
+        setState(() => _aiOn = PrivacyPreferences.instance.externalAiAllowed);
+      }
     });
     TapSound.load().then((_) {
       if (mounted) setState(() => _tapSoundOn = TapSound.enabled);
@@ -167,6 +175,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           content: Text(value
               ? 'Crash reports on — thanks for helping fix bugs.'
               : 'Crash reports off — takes effect on restart.')),
+    );
+  }
+
+  Future<void> _toggleAi(bool value) async {
+    AppHaptics.tap();
+    await PrivacyPreferences.instance.setExternalAiAllowed(value);
+    if (!mounted) return;
+    setState(() => _aiOn = PrivacyPreferences.instance.externalAiAllowed);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(value
+            ? 'AI features may send selected task text to our AI provider.'
+            : 'External AI is off — local suggestions still work.'),
+      ),
     );
   }
 
@@ -321,6 +343,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
+  }
+
+  Future<void> _shareFeedback() async {
+    final repo = TaskRepository.instance;
+    final contextText = [
+      'Daily Bloom feedback',
+      'App: 1.0.1',
+      'Platform: ${kIsWeb ? 'web' : defaultTargetPlatform.name}',
+      'Sync state: ${repo.syncState.name}',
+      'Pending changes: ${repo.pendingMutations}',
+      'Parked changes: ${repo.deadLetterCount}',
+      '',
+      'Please describe what happened:',
+    ].join('\n');
+    await SharePlus.instance.share(ShareParams(text: contextText));
   }
 
   /// Sync issues row: visible only when something is queued or parked.
@@ -585,7 +622,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (s.done) await repo.setSubtaskDone(sub.id, true);
           }
           if (task.status != 'todo') {
-            await repo.moveTask(created.id, task.status);
+            await repo.moveTask(created.id, task.status, awardProgress: false);
           }
           tasksAdded++;
         }
@@ -1116,7 +1153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Anonymous crash logs only — off switch takes effect on restart.',
+                         'Anonymous crash logs only — opt in to help fix bugs.',
                         style: TextStyle(
                             fontSize: 12, color: SakuraColors.inkSoft),
                       ),
@@ -1195,9 +1232,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          // ── Audio ──────────────────────────────────────────────────────────
+           ),
+           const SizedBox(height: 14),
+           Container(
+             padding: const EdgeInsets.all(20),
+             decoration: SakuraTheme.cardDecoration(),
+             child: Row(
+               children: [
+                 Container(
+                   padding: const EdgeInsets.all(8),
+                   decoration: BoxDecoration(
+                     color: SakuraColors.primary.withValues(alpha: 0.1),
+                     shape: BoxShape.circle,
+                   ),
+                   child: Icon(LucideIcons.sparkles,
+                       size: 15, color: SakuraColors.primary),
+                 ),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   child: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Text(
+                         'External AI suggestions',
+                         style: TextStyle(
+                             fontSize: 14,
+                             fontWeight: FontWeight.w700,
+                             color: SakuraColors.ink),
+                       ),
+                       const SizedBox(height: 2),
+                       Text(
+                         'Off by default. Local suggestions remain available; when on, selected task text may leave this device.',
+                         style: TextStyle(
+                             fontSize: 12, color: SakuraColors.inkSoft),
+                       ),
+                     ],
+                   ),
+                 ),
+                 Switch(
+                   value: _aiOn,
+                   onChanged: _toggleAi,
+                   activeThumbColor: SakuraColors.primary,
+                 ),
+               ],
+             ),
+           ),
+           const SizedBox(height: 14),
+           // ── Audio ──────────────────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: SakuraTheme.cardDecoration(),
@@ -1386,8 +1467,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-          ),
-          Container(
+           ),
+           const SizedBox(height: 14),
+           Container(
+             padding: const EdgeInsets.all(20),
+             decoration: SakuraTheme.cardDecoration(),
+             child: Column(
+               crossAxisAlignment: CrossAxisAlignment.stretch,
+               children: [
+                 Text('Help and privacy',
+                     style: TextStyle(
+                         fontSize: 14,
+                         fontWeight: FontWeight.w700,
+                         color: SakuraColors.ink)),
+                 const SizedBox(height: 4),
+                 Text(
+                   'Share a report with safe diagnostic context, or review what Daily Bloom stores and sends.',
+                   style: TextStyle(fontSize: 12, color: SakuraColors.inkSoft),
+                 ),
+                 const SizedBox(height: 10),
+                 OutlinedButton.icon(
+                   style: _actionStyle,
+                   onPressed: _shareFeedback,
+                   icon: const Icon(LucideIcons.messageCircle, size: 15),
+                   label: const Text('Send feedback',
+                       style: TextStyle(fontWeight: FontWeight.w700)),
+                 ),
+                 const SizedBox(height: 6),
+                 Row(
+                   mainAxisAlignment: MainAxisAlignment.center,
+                   children: [
+                     TextButton(
+                       onPressed: () => showPrivacyPolicy(context),
+                       child: const Text('Privacy Policy'),
+                     ),
+                     TextButton(
+                       onPressed: () => showTermsOfUse(context),
+                       child: const Text('Terms of Use'),
+                     ),
+                   ],
+                 ),
+               ],
+             ),
+           ),
+           const SizedBox(height: 14),
+           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: _danger.withValues(alpha: 0.06),

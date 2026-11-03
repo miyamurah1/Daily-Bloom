@@ -1,8 +1,11 @@
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'analytics.dart';
 import 'package:http/http.dart' as http;
@@ -98,16 +101,33 @@ class AuthStore extends ChangeNotifier {
   AuthUser? _user;
   bool _ready = false;
 
-  /// While true, the authStateChanges listener ignores events. Signup sets
-  /// this: creating a Firebase user signs it in immediately, but signup
-  /// must NOT grant app access — the session is dropped right after and
-  /// the user logs in explicitly. Without the guard the listener would
-  /// sync a profile for the transient session and flash the app open.
+  /// While true, signup owns the newly-created Firebase session and profile
+  /// sync. This avoids a race between the auth listener and onboarding.
   bool _ignoreAuthEvents = false;
 
   AuthUser? get user => _user;
-  bool get isLoggedIn => FirebaseAuth.instance.currentUser != null && _user != null;
+  bool get isLoggedIn {
+    try {
+      return FirebaseAuth.instance.currentUser != null && _user != null;
+    } catch (_) {
+      return false;
+    }
+  }
   bool get isReady => _ready;
+
+  /// Password accounts should verify their address, while OAuth providers
+  /// arrive verified. Verification is a trust signal, not a hard block: the
+  /// app remains usable while the user finishes the email step.
+  bool get needsEmailVerification {
+    try {
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      return firebaseUser != null &&
+          (firebaseUser.email?.isNotEmpty ?? false) &&
+          !firebaseUser.emailVerified;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static final _emailRe = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
@@ -268,11 +288,9 @@ class AuthStore extends ChangeNotifier {
   }
 
   /// Sign up with email + password via Firebase Auth.
-  /// Deliberately does NOT sign the new account in: Firebase auto-signs
-  /// the created user, so the session is dropped immediately and the
-  /// caller routes back to Login. The DB row + seeds are created on the
-  /// first explicit login via firebase-sync. Returns the account email so
-  /// login can pre-fill it.
+  /// Firebase signs the new user in immediately. Keep that session and sync
+  /// the profile so onboarding can begin without a redundant login step.
+  /// Returns the account email for legacy callers.
   Future<String> signup({
     required String email,
     required String password,
@@ -280,41 +298,48 @@ class AuthStore extends ChangeNotifier {
   }) async {
     _ignoreAuthEvents = true;
     try {
-      try {
-        final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email.trim(),
-          password: password,
-        );
-        // Brand-new Firebase identity: start from a clean device even if
-        // a previous account's data survived (upgrade path, missed logout).
-        await clearAccountData();
-        // Update the Firebase display name immediately.
-        if (name.isNotEmpty) {
-          await cred.user?.updateDisplayName(name.trim());
-        }
-        final address = (cred.user?.email ?? email).trim();
-        // Drop the auto-sign-in: no direct access to the app from signup.
-        try {
-          await FirebaseAuth.instance.signOut();
-        } catch (_) {}
-        try {
-          await _googleClient().signOut();
-        } catch (_) {}
-        _user = null;
-        _ready = true;
-        await _clearPersisted();
-        notifyListeners();
-        BloomAnalytics.signUp(method: 'email');
-        return address;
-      } finally {
-        _ignoreAuthEvents = false;
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      // Brand-new Firebase identity: start from a clean device even if
+      // a previous account's data survived an upgrade or missed logout.
+      await clearAccountData();
+      if (name.isNotEmpty) {
+        await cred.user?.updateDisplayName(name.trim());
       }
+      try {
+        await cred.user?.sendEmailVerification();
+      } catch (_) {
+        // Account creation should still succeed if mail delivery is
+        // temporarily unavailable; the banner offers retry in-app.
+      }
+      final firebaseUser = cred.user;
+      final address = (firebaseUser?.email ?? email).trim();
+      if (firebaseUser != null) {
+        try {
+          _user = await _syncProfile(firebaseUser);
+        } catch (_) {
+          _user = AuthUser(
+            id: firebaseUser.uid,
+            email: firebaseUser.email ?? address,
+            displayName: firebaseUser.displayName ?? name.trim(),
+          );
+        }
+        await _persistUser();
+      }
+      _ready = true;
+      BloomAnalytics.signUp(method: 'email');
+      return address;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
     } on AuthException {
       rethrow;
     } catch (_) {
       throw const AuthException('Could not create account — try again');
+    } finally {
+      _ignoreAuthEvents = false;
+      notifyListeners();
     }
   }
 
@@ -332,6 +357,16 @@ class AuthStore extends ChangeNotifier {
         final googleUser = await _googleClient().signIn();
         if (googleUser == null) return false; // User cancelled.
         final googleAuth = await googleUser.authentication;
+        if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+          // Android misconfigured: no usable web client (no
+          // google-services.json Android OAuth client), so the ID token has
+          // no audience and Firebase rejects the credential.
+          throw const AuthException(
+            'Google sign-in is not configured on this device. '
+            'Add google-services.json (with an Android OAuth client ID), '
+            'then restart and try again.',
+          );
+        }
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
@@ -358,6 +393,60 @@ class AuthStore extends ChangeNotifier {
     } catch (_) {
       throw const AuthException('Could not send reset email — try again');
     }
+  }
+
+  /// Sign in with Apple on Apple platforms. Firebase receives a nonce-bound
+  /// identity token so replayed credentials cannot be reused.
+  Future<bool> signInWithApple() async {
+    try {
+      final rawNonce = _randomNonce();
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: const [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: sha256.convert(utf8.encode(rawNonce)).toString(),
+      );
+      final identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        throw const AuthException('Apple sign-in returned no identity token');
+      }
+      final oauth = OAuthProvider('apple.com').credential(
+        idToken: identityToken,
+        rawNonce: rawNonce,
+      );
+      await FirebaseAuth.instance.signInWithCredential(oauth);
+      await _rememberEmail(FirebaseAuth.instance.currentUser?.email);
+      BloomAnalytics.login(method: 'apple');
+      return true;
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_firebaseMsg(e));
+    } on AuthException {
+      rethrow;
+    } catch (_) {
+      throw const AuthException('Apple sign-in failed — try again.');
+    }
+  }
+
+  Future<void> sendEmailVerification() async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null || firebaseUser.emailVerified) return;
+    try {
+      await firebaseUser.sendEmailVerification();
+    } on FirebaseAuthException catch (e) {
+      throw AuthException(_firebaseMsg(e));
+    } catch (_) {
+      throw const AuthException('Could not send verification email — try again');
+    }
+  }
+
+  Future<bool> refreshEmailVerification() async {
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+    if (firebaseUser == null) return false;
+    await firebaseUser.reload();
+    final refreshed = FirebaseAuth.instance.currentUser;
+    notifyListeners();
+    return refreshed?.emailVerified ?? false;
   }
 
   /// Delete the Firebase account + backend data (Play Store requirement).
@@ -511,7 +600,7 @@ class AuthStore extends ChangeNotifier {
       case 'email-already-in-use':
         return 'An account with this email already exists';
       case 'weak-password':
-        return 'Password must be at least 6 characters';
+        return 'Password must be at least 8 characters';
       case 'invalid-email':
         return 'Enter a valid email address';
       case 'user-disabled':
@@ -525,6 +614,14 @@ class AuthStore extends ChangeNotifier {
       default:
         return e.message ?? 'Authentication failed — try again';
     }
+  }
+
+  static String _randomNonce([int length = 32]) {
+    const chars =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => chars[random.nextInt(chars.length)])
+        .join();
   }
 
   static String _msg(String body, String fallback) {

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_client.dart';
 import 'auth_store.dart';
+import 'privacy_preferences.dart';
 import '../data/energy_store.dart';
 import 'mock_data.dart';
 
@@ -425,10 +426,16 @@ class AiClient {
 
   Future<Map<String, String>> get _headers => AuthStore.instance.authHeaders;
 
+  Future<bool> get _externalAiAllowed async {
+    await PrivacyPreferences.instance.load();
+    return PrivacyPreferences.instance.externalAiAllowed;
+  }
+
   Future<AiParse> parse(String text) async {
     final fallback = parseQuickAddLocal(text);
     // Non-Latin input: skip AI entirely (it would mangle the title).
     if (!isAiSupportedScript(text)) return fallback;
+    if (!await _externalAiAllowed) return fallback;
     try {
       final res = await _client
           .post(
@@ -450,6 +457,7 @@ class AiClient {
   Future<List<AiStep>> breakdown(String title) async {
     final fallback = breakdownLocal(title);
     if (!isAiSupportedScript(title)) return fallback;
+    if (!await _externalAiAllowed) return fallback;
     try {
       final res = await _client
           .post(
@@ -479,6 +487,7 @@ class AiClient {
 
   Future<List<AiPick>> plan(List<Task> tasks) async {
     final fallback = planDayLocal(tasks);
+    if (!await _externalAiAllowed) return fallback;
     try {      final res = await _client
           .post(
             Uri.parse('${BloomApi.baseUrl}/api/ai/plan'),
@@ -529,6 +538,7 @@ class AiClient {
   }) async {
     final fallback =
         narrativeLocal(tips, done: done, streak: streak, focusMinutes: focusMinutes);
+    if (!await _externalAiAllowed) return fallback;
     try {
       final res = await _client
           .post(
@@ -552,6 +562,7 @@ class AiClient {
 
   Future<List<GroomGroup>> groom(List<Task> tasks) async {
     final fallback = groomLocal(tasks);
+    if (!await _externalAiAllowed) return fallback;
     try {
       final res = await _client
           .post(
@@ -588,6 +599,7 @@ class AiClient {
   Future<AiAnswer> ask(String question, List<Task> tasks) async {
     final fallback = askLocal(question, tasks);
     if (!isAiSupportedScript(question)) return fallback;
+    if (!await _externalAiAllowed) return fallback;
     try {
       final res = await _client
           .post(

@@ -4,23 +4,26 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        # No default on purpose: a silent localhost URL baked into a
-        # release APK is a dead build. You must pass a real backend URL
-        # (or an explicit http://localhost... for same-machine testing).
-        description: 'Backend URL baked into the APK (BLOOM_API) — e.g. https://api.yourdomain.com'
-        required: true
+        description: 'Backend URL baked into the APK (BLOOM_API)'
+        required: false
+        default: 'https://daily-bloom-api.onrender.com'
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Render derives the public URL from the service name in render.yaml.
+      # Manual runs can override it with workflow_dispatch -> api_url.
+      API_URL: ${{ inputs.api_url || 'https://daily-bloom-api.onrender.com' }}
     steps:
       - uses: actions/checkout@v4
       - name: Guard against an empty backend URL
-        env:
-          API_URL: ${{ inputs.api_url }}
         run: |
           if [ -z "$(printf '%s' "$API_URL" | tr -d ' \t\r\n')" ]; then
-            echo "::error title=Missing backend URL::api_url is required. Pass the deployed backend (https://...) or an explicit http://localhost for same-machine testing — an empty BLOOM_API ships a build that cannot reach its server."
+            echo "::error title=Missing backend URL::Set api_url in the manual run or configure the Render backend URL."
             exit 1
           fi
       - uses: actions/setup-java@v4
@@ -117,14 +120,20 @@ jobs:
             }
           EOF
           fi
-      - name: Warn when Firebase secrets are missing (login dead in CI)
+      - name: Require Firebase configuration for release APK
         env:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
         run: |
-          if [ -z "$FIREBASE_API_KEY" ]; then
-            echo "::warning title=Login will be broken::FIREBASE_* secrets are not set - this APK uses CI-STUB Firebase config, so email and Google sign-in cannot work. Set the 4 FIREBASE_* secrets in Settings > Secrets and variables > Actions, then rebuild."
-          fi
-      - name: Configure Android release signing (when secrets provided)
+          for value in "$FIREBASE_API_KEY" "$FIREBASE_APP_ID" "$FIREBASE_MESSAGING_SENDER_ID" "$FIREBASE_PROJECT_ID"; do
+            if [ -z "$value" ]; then
+              echo "::error title=Missing Firebase configuration::Set FIREBASE_API_KEY, FIREBASE_APP_ID, FIREBASE_MESSAGING_SENDER_ID, and FIREBASE_PROJECT_ID before building a release APK."
+              exit 1
+            fi
+          done
+      - name: Configure Android release signing
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -140,12 +149,13 @@ jobs:
           EOF
             echo "Release signing configured from secrets (stable SHA-1)."
           else
-            echo "::warning title=Debug-signed APK::Android signing secrets not set - this CI build uses an ephemeral debug key, so its SHA-1 differs on every build and Google sign-in will fail for CI-built APKs. Set ANDROID_KEYSTORE_* secrets or build locally (android/key.properties exists there)."
+            echo "::error title=Missing Android signing::Set ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, and ANDROID_KEY_ALIAS before building a release APK."
+            exit 1
           fi
       - run: flutter analyze
       - run: >
-          flutter build apk --release
-          --dart-define=BLOOM_API=${{ inputs.api_url }}
+           flutter build apk --release
+           --dart-define=BLOOM_API=${{ env.API_URL }}
       - uses: actions/upload-artifact@v4
         with:
           name: daily-bloom-apk

@@ -31,9 +31,15 @@ class SyncBanner extends StatelessWidget {
       listenable: TaskRepository.instance,
       builder: (context, _) {
         final pending = TaskRepository.instance.pendingMutations;
-        final label = live
-            ? (pending > 0 ? '● live db · $pending queued' : '● live db')
-            : (pending > 0 ? '○ offline · $pending queued' : '○ offline');
+        final state = TaskRepository.instance.syncState;
+        final baseLabel = switch (state) {
+          TaskSyncState.syncing => '↻ syncing',
+          TaskSyncState.synced => '● synced',
+          TaskSyncState.offline => '○ saved offline',
+          TaskSyncState.failed => '△ sync needs attention',
+          TaskSyncState.saved => live ? '● saved' : '○ saved locally',
+        };
+        final label = pending > 0 ? '$baseLabel · $pending queued' : baseLabel;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -66,9 +72,13 @@ class SyncBanner extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
-                        color: live
-                            ? SakuraColors.primary
-                            : SakuraColors.inkSoft,
+                       color: state == TaskSyncState.failed
+                           ? Colors.deepOrange
+                           : state == TaskSyncState.offline
+                               ? SakuraColors.inkSoft
+                               : live
+                           ? SakuraColors.primary
+                           : SakuraColors.inkSoft,
                       ),
                     ),
                   ),

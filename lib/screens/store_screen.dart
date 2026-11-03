@@ -3,6 +3,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../game/gamification_state.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/motion.dart';
 import '../widgets/theme_card.dart';
@@ -46,6 +47,7 @@ class _StoreScreenState extends State<StoreScreen> {
         _loading = false;
         _offline = false;
       });
+      GamificationStateNotifier.instance.syncServerTokens(store.balance);
     } catch (e) {
       if (!mounted) return;
       if (e is AuthExpiredException) return;

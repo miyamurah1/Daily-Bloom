@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,6 +9,9 @@ import 'analytics.dart';
 import 'auth_store.dart';
 import 'guest_store.dart';
 import 'mock_data.dart';
+import '../game/gamification_state.dart';
+
+enum TaskSyncState { saved, syncing, synced, offline, failed }
 
 /// Single source of truth for all tasks across the application.
 ///
@@ -18,6 +22,7 @@ import 'mock_data.dart';
 ///   shows user data rather than static dummy fixtures.
 class TaskRepository extends ChangeNotifier {
   static const _kTasksCache = 'bloom_tasks_cache_v2';
+  static const _kLocalSchema = 'bloom_local_schema_v2';
   static const _kOutbox = 'bloom_outbox_v1';
   static const _kDeadLetters = 'bloom_outbox_dead_v1';
 
@@ -30,10 +35,19 @@ class TaskRepository extends ChangeNotifier {
 
   /// Test seam: swap the API implementation to drive online/offline
   /// scenarios deterministically. Production leaves the default.
-  @visibleForTesting
-  static BloomApi Function() apiFactory = BloomApi.new;
+  static BloomApi Function() _apiFactory = BloomApi.new;
 
-  late final BloomApi _api = apiFactory();
+  @visibleForTesting
+  static BloomApi Function() get apiFactory => _apiFactory;
+
+  @visibleForTesting
+  static set apiFactory(BloomApi Function() value) {
+    _apiFactory = value;
+    instance._cachedApi = null;
+  }
+
+  BloomApi? _cachedApi;
+  BloomApi get _api => _cachedApi ??= apiFactory();
 
   List<Task> _tasks = [];
 
@@ -50,6 +64,7 @@ class TaskRepository extends ChangeNotifier {
   bool _loading = false;
   String? _error;
   bool _isInitialized = false;
+  TaskSyncState _syncState = TaskSyncState.saved;
 
   /// Test seam: disable the background retry loop (widget tests must not
   /// leave pending timers).
@@ -61,6 +76,11 @@ class TaskRepository extends ChangeNotifier {
   static Duration retryInterval = const Duration(seconds: 15);
 
   Timer? _retryTimer;
+
+  /// SharedPreferences writes are asynchronous platform calls. Queue them so
+  /// two fast edits cannot finish out of order and restore an older snapshot.
+  Future<void>? _prefsWrite;
+  static final Random _idRandom = Random.secure();
 
   /// Last-seen timeline / focus per task, so the detail screen keeps its
   /// history readable offline (read-through cache).
@@ -108,7 +128,7 @@ class TaskRepository extends ChangeNotifier {
           folder: (g['folder'] as String?) ?? 'Productivity',
         );
         if (g['done'] == true) {
-          await moveTask(created.id, 'done');
+          await moveTask(created.id, 'done', awardProgress: false);
         }
         migrated++;
         // Landed — drop it from the guest store so a retry cannot
@@ -129,6 +149,7 @@ class TaskRepository extends ChangeNotifier {
   List<Task> get tasks => List.unmodifiable(_tasks);
   bool get isLoading => _loading;
   String? get error => _error;
+  TaskSyncState get syncState => _syncState;
 
   /// Number of mutations waiting to sync — surfaced for UI + tests.
   int get pendingMutations => _outbox.length;
@@ -136,6 +157,24 @@ class TaskRepository extends ChangeNotifier {
 
   /// Mutations parked after repeated failures.
   int get deadLetterCount => _deadLetters.length;
+
+  /// Task ids whose local edits still have a queued server mutation. Remote
+  /// refreshes preserve these optimistic rows until replay succeeds instead
+  /// of silently replacing an offline edit with stale server data.
+  Set<String> get pendingTaskIds {
+    final ids = <String>{};
+    for (final mutation in _outbox) {
+      final kind = '${mutation['kind']}';
+      if (kind == 'create') {
+        ids.add('${mutation['clientId']}');
+      } else if (mutation['id'] != null) {
+        ids.add('${mutation['id']}');
+      } else if (mutation['taskId'] != null) {
+        ids.add('${mutation['taskId']}');
+      }
+    }
+    return ids;
+  }
 
   List<Task> get todoTasks => _tasks.where((t) => t.status == 'todo').toList();
   List<Task> get inProgressTasks => _tasks.where((t) => t.status == 'in_progress').toList();
@@ -218,7 +257,12 @@ class TaskRepository extends ChangeNotifier {
     _deadLetters.clear();
     _loading = false;
     _error = null;
+    _syncState = TaskSyncState.saved;
     _isInitialized = false;
+    _guestMode = false;
+    _cachedApi = null;
+    _prefsWrite = null;
+    _cancelRetry();
     notifyListeners();
   }
 
@@ -237,15 +281,16 @@ class TaskRepository extends ChangeNotifier {
   }
 
   Future<void> _saveOutbox() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kOutbox, jsonEncode(_outbox));
-    } catch (_) {}
+    final raw = jsonEncode(_outbox);
+    await _queuePrefsWrite((prefs) async {
+      await prefs.setString(_kOutbox, raw);
+    });
   }
 
   Future<void> _enqueue(Map<String, dynamic> mutation) async {
     mutation['attempts'] = (mutation['attempts'] as int?) ?? 0;
     _outbox.add(mutation);
+    _syncState = TaskSyncState.offline;
     await _saveOutbox();
     notifyListeners();
     // Live reconnection: while anything is pending, keep trying in the
@@ -283,10 +328,30 @@ class TaskRepository extends ChangeNotifier {
   }
 
   Future<void> _saveDeadLetters() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_kDeadLetters, jsonEncode(_deadLetters));
-    } catch (_) {}
+    final raw = jsonEncode(_deadLetters);
+    await _queuePrefsWrite((prefs) async {
+      await prefs.setString(_kDeadLetters, raw);
+    });
+  }
+
+  Future<void> _queuePrefsWrite(
+      Future<void> Function(SharedPreferences prefs) write) {
+    Future<void> perform() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await write(prefs);
+      } catch (_) {
+        // Local persistence is best-effort; the in-memory state remains live.
+      }
+    }
+    // Start an idle queue in the caller's zone. Retaining an already-completed
+    // Future from another test/event zone can strand platform callbacks.
+    final pending = _prefsWrite;
+    final next = pending == null ? perform() : pending.then((_) => perform());
+    _prefsWrite = next;
+    return next.whenComplete(() {
+      if (identical(_prefsWrite, next)) _prefsWrite = null;
+    });
   }
 
   /// Drain the queued mutations now (called on reconnect / app resume).
@@ -296,6 +361,8 @@ class TaskRepository extends ChangeNotifier {
       _cancelRetry();
       return;
     }
+    _syncState = TaskSyncState.syncing;
+    notifyListeners();
     await _drainOutbox();
     if (_outbox.isEmpty) _cancelRetry();
   }
@@ -314,15 +381,21 @@ class TaskRepository extends ChangeNotifier {
   /// keys, so without this a new login inherits old data.
   Future<void> clearForAccountSwitch() async {
     _cancelRetry();
+    // Let any queued snapshot finish before removing the keys, otherwise an
+    // older platform write could resurrect the previous account's cache.
+    final pendingWrite = _prefsWrite;
+    if (pendingWrite != null) await pendingWrite;
     _tasks = [];
     _outbox.clear();
     _deadLetters.clear();
     _eventsCache.clear();
     _focusCache.clear();
     _error = null;
+    _syncState = TaskSyncState.saved;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kTasksCache);
+      await prefs.remove(_kLocalSchema);
       await prefs.remove(_kOutbox);
       await prefs.remove(_kDeadLetters);
     } catch (_) {}
@@ -390,6 +463,11 @@ class TaskRepository extends ChangeNotifier {
     await _saveOutbox();
     await _saveDeadLetters();
     await _saveToLocalCache();
+    _syncState = _deadLetters.isNotEmpty
+        ? TaskSyncState.failed
+        : _outbox.isEmpty
+            ? TaskSyncState.synced
+            : TaskSyncState.offline;
     notifyListeners();
   }
 
@@ -481,17 +559,44 @@ class TaskRepository extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kTasksCache);
       if (raw != null) {
-        final list = jsonDecode(raw) as List;
-        _tasks = list.map((e) => Task.fromJson(e as Map<String, dynamic>)).toList();
+        final decoded = jsonDecode(raw);
+        final list = decoded is Map<String, dynamic>
+            ? decoded['tasks']
+            : decoded;
+        if (list is! List) throw const FormatException('invalid task cache');
+        final recovered = <Task>[];
+        var skipped = 0;
+        for (final item in list) {
+          try {
+            if (item is! Map<String, dynamic>) throw const FormatException();
+            recovered.add(Task.fromJson(item));
+          } catch (_) {
+            skipped++;
+          }
+        }
+        _tasks = recovered;
+        if (skipped > 0) {
+          _error = '$skipped damaged local task${skipped == 1 ? '' : 's'} skipped; your other tasks are safe.';
+        }
+        // Migrate the original bare-list format to a versioned envelope.
+        if (decoded is List) {
+          await prefs.setString(_kTasksCache, jsonEncode({
+            'version': 2,
+            'tasks': list,
+          }));
+        }
+        await prefs.setInt(_kLocalSchema, 2);
         notifyListeners();
       }
-    } catch (_) {}
+    } catch (_) {
+      _error = 'Could not read the saved task cache; start fresh or restore a backup.';
+    }
   }
 
   Future<void> _saveToLocalCache() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = jsonEncode(_tasks
+    final raw = jsonEncode({
+      'version': 2,
+      'tasks': _tasks
           .map((t) => {
                 'id': t.id,
                 'title': t.title,
@@ -529,9 +634,12 @@ class TaskRepository extends ChangeNotifier {
                 'habit_frozen': t.habitFrozen,
                 'habit_frozen_streak': t.habitFrozenStreak,
               })
-          .toList());
+            .toList(),
+    });
+    await _queuePrefsWrite((prefs) async {
       await prefs.setString(_kTasksCache, raw);
-    } catch (_) {}
+      await prefs.setInt(_kLocalSchema, 2);
+    });
   }
 
   Future<void> loadRemote({bool withDetails = true}) async {
@@ -545,6 +653,7 @@ class TaskRepository extends ChangeNotifier {
       return;
     }
     _loading = true;
+    _syncState = TaskSyncState.syncing;
     _error = null;
     notifyListeners();
     try {
@@ -552,17 +661,46 @@ class TaskRepository extends ChangeNotifier {
       // BEFORE pulling, so the server sees our intent in order.
       await _drainOutbox();
       final remoteTasks = await _api.fetchTasks(withDetails: withDetails);
-      _tasks = remoteTasks;
+      _tasks = _mergeRemoteWithPending(remoteTasks);
       _loading = false;
-      await _saveToLocalCache();
+      _syncState = TaskSyncState.synced;
+      // Render the authoritative result immediately. Local persistence is
+      // serialized but must never delay a visible remote refresh.
       notifyListeners();
+      await _saveToLocalCache();
     } catch (e) {
       _loading = false;
       if (e is! AuthExpiredException) {
         _error = 'Could not sync with cloud. Using local offline cache.';
       }
+      _syncState = TaskSyncState.offline;
       notifyListeners();
     }
+  }
+
+  List<Task> _mergeRemoteWithPending(List<Task> remote) {
+    final pending = pendingTaskIds;
+    final deleted = _outbox
+        .where((m) => '${m['kind']}' == 'delete')
+        .map((m) => '${m['id']}')
+        .toSet();
+    final localById = {for (final task in _tasks) task.id: task};
+    final merged = <Task>[];
+    for (final task in remote) {
+      if (deleted.contains(task.id)) continue;
+      merged.add(pending.contains(task.id) && localById[task.id] != null
+          ? localById[task.id]!
+          : task);
+    }
+    // Keep offline-created rows visible until their create mutation lands.
+    for (final task in _tasks) {
+      if (pending.contains(task.id) &&
+          task.id.startsWith('temp_') &&
+          !merged.any((item) => item.id == task.id)) {
+        merged.add(task);
+      }
+    }
+    return merged;
   }
 
   /// Optimistic creation: task appears instantly in UI.
@@ -576,7 +714,8 @@ class TaskRepository extends ChangeNotifier {
     DateTime? dueAt,
     String cadence = 'once',
   }) async {
-    final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final tempId =
+        'temp_${DateTime.now().microsecondsSinceEpoch}_${_idRandom.nextInt(1 << 32).toRadixString(16)}';
     // Activation checkpoint: first real task ever (temp rows excluded).
     final isFirst = !_tasks.any((t) => !t.id.startsWith('temp_'));
     final optimisticTask = Task(
@@ -619,6 +758,7 @@ class TaskRepository extends ChangeNotifier {
       }
       notifyListeners();
       await _saveToLocalCache();
+      _syncState = TaskSyncState.synced;
       return serverTask;
     } catch (e) {
       // Offline fallback: keep the optimistic task AND queue the create
@@ -637,13 +777,15 @@ class TaskRepository extends ChangeNotifier {
           'due_at': dueAt?.toIso8601String(),
         },
       });
+      _syncState = TaskSyncState.offline;
       return optimisticTask;
     }
   }
 
   /// Optimistic move between Kanban columns. Works even when the task is
   /// not (yet) in the local cache — the API call still fires.
-  Future<void> moveTask(String id, String newStatus) async {
+  Future<void> moveTask(String id, String newStatus,
+      {bool awardProgress = true}) async {
     final idx = _tasks.indexWhere((t) => t.id == id);
     final wasDone = idx != -1 && _tasks[idx].status == 'done';
     if (idx != -1) {
@@ -652,8 +794,13 @@ class TaskRepository extends ChangeNotifier {
       _tasks[idx] = old.copyWith(status: newStatus);
       notifyListeners();
       await _saveToLocalCache();
-      if (newStatus == 'done' && !wasDone) {
+      if (awardProgress && newStatus == 'done' && !wasDone) {
+        GamificationStateNotifier.instance.markDailyActive();
+        GamificationStateNotifier.instance
+            .registerTaskCompletion(taskId: id);
         BloomAnalytics.taskCompleted();
+      } else if (awardProgress && newStatus != 'done' && wasDone) {
+        GamificationStateNotifier.instance.revokeTaskCompletion(taskId: id);
       }
     }
 
@@ -667,9 +814,11 @@ class TaskRepository extends ChangeNotifier {
         _tasks[currIdx] = updated;
         notifyListeners();
       }
+      _syncState = TaskSyncState.synced;
     } catch (_) {
       // Offline: keep the optimistic status and queue the move.
       await _enqueue({'kind': 'move', 'id': id, 'status': newStatus});
+      _syncState = TaskSyncState.offline;
     }
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -31,6 +32,8 @@ class GamificationStateNotifier extends ChangeNotifier {
   static const _kDoneDay = 'bloom_game_done_day';
   static const _kDoneCount = 'bloom_game_done_count';
   static const _kNudgedDay = 'bloom_game_nudged_day';
+  static const _kTaskGains = 'bloom_game_task_gains_v1';
+  static const _kRitualDay = 'bloom_game_ritual_day';
 
   /// Prefs keys from the removed stake/wilt system (v1.0). Never read;
   /// purged once on [load] so upgraded devices don't carry dead data.
@@ -46,6 +49,11 @@ class GamificationStateNotifier extends ChangeNotifier {
   static final GamificationStateNotifier instance =
       GamificationStateNotifier();
 
+  /// Widget tests use fake time and must not inherit a real 15-minute timer.
+  /// Production keeps this enabled so the combo HUD refreshes on expiry.
+  @visibleForTesting
+  static bool timersEnabled = true;
+
   int _totalXp = 0;
   int _tokens = 0;
   int _streak = 0;
@@ -58,17 +66,17 @@ class GamificationStateNotifier extends ChangeNotifier {
   String? _doneDayIso;
   int _doneCount = 0;
   String? _nudgedDayIso;
+  String? _ritualDayIso;
 
   DateTime? _lastCompletionAt;
   int _comboCount = 0;
   DateTime? _comboExpiresAt;
   Timer? _comboTimer;
 
-  /// Undo support: gain + task of the most recent completion, so reopening
-  /// that task revokes exactly what it granted. Memory-only: after a
-  /// restart an undo falls back to the base amount.
-  String? _lastGainTaskId;
-  int? _lastGain;
+  /// Completion ledger: every task keeps the exact XP amount it received.
+  /// This survives restarts and makes undo accurate even after other tasks
+  /// have been completed.
+  final Map<String, int> _taskGains = {};
 
   GamificationStateNotifier({Random? random});
 
@@ -130,6 +138,7 @@ class GamificationStateNotifier extends ChangeNotifier {
   /// (anti-farm: done → undo → done must not mint XP).
   int registerTaskCompletion(
       {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
+    if (taskId != null && _taskGains.containsKey(taskId)) return 0;
     final now = DateTime.now();
     final last = _lastCompletionAt;
     if (last != null && now.difference(last) <= BloomEngine.comboWindow) {
@@ -150,29 +159,22 @@ class GamificationStateNotifier extends ChangeNotifier {
     }
     final gain = BloomEngine.xpForCombo(baseXp, _comboCount);
     _totalXp += gain;
-    _lastGainTaskId = taskId;
-    _lastGain = gain;
+    if (taskId != null && taskId.isNotEmpty) _taskGains[taskId] = gain;
     _persist();
     notifyListeners();
     return gain;
   }
 
-  /// Call when a completed task is reopened (undone). Revokes the XP its
-  /// completion granted — the exact last gain when it was this task's,
-  /// otherwise the base amount — breaks the combo chain and walks back
-  /// today's completion count. Total XP floors at zero: levels can drop,
-  /// never below nothing. Returns the XP revoked.
+  /// Call when a completed task is reopened (undone). Revokes the exact XP
+  /// recorded for that task, breaks the combo chain, and walks back today's
+  /// completion count. The ledger entry stays as a zero so the same task
+  /// cannot be farmed with done → undo → done.
   int revokeTaskCompletion(
       {int baseXp = BloomEngine.baseTaskXp, String? taskId}) {
-    var revoke = baseXp;
-    if (taskId != null &&
-        taskId == _lastGainTaskId &&
-        _lastGain != null &&
-        _lastGain! > 0) {
-      revoke = _lastGain!;
-    }
-    _lastGainTaskId = null;
-    _lastGain = null;
+    final recorded = taskId == null ? null : _taskGains[taskId];
+    final revoke = taskId == null ? baseXp : (recorded ?? 0);
+    if (revoke == 0) return 0;
+    if (taskId != null) _taskGains[taskId] = 0;
     _totalXp = (_totalXp - revoke).clamp(0, 1 << 62);
     // An undo breaks the chain: the next completion restarts at x1.
     _comboCount = 0;
@@ -187,14 +189,16 @@ class GamificationStateNotifier extends ChangeNotifier {
     return revoke;
   }
 
-  /// Daily ritual \u2192 fixed meaningful reward. No loot box: rewards
-  /// completing your focus, not volume. Adds tokens, returns roll.
-  MysteryReward claimDailyRitual() {
-    const reward = MysteryReward(25);
-    _tokens += reward.tokens;
+  /// Daily ritual: fixed, transparent reward with local idempotency for guests.
+  /// Signed-in accounts use the server wallet endpoint instead.
+  bool claimDailyRitual() {
+    final day = _dayKey(DateTime.now());
+    if (_ritualDayIso == day) return false;
+    _ritualDayIso = day;
+    _tokens += 25;
     _persist();
     notifyListeners();
-    return reward;
+    return true;
   }
   /// Call once per app foreground (or after a recovery task). Handles
   /// same-day (no-op), next-day (+1), and broken streak (reset to 1).
@@ -260,6 +264,16 @@ class GamificationStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replace the local display balance with the server wallet balance.
+  /// Signed-in accounts use the backend as the source of truth; guests keep
+  /// the existing local-only economy.
+  void syncServerTokens(int balance) {
+    if (balance < 0 || _tokens == balance) return;
+    _tokens = balance;
+    _persist();
+    notifyListeners();
+  }
+
   bool spendTokens(int amount) {
     if (_tokens < amount) return false;
     _tokens -= amount;
@@ -295,7 +309,7 @@ class GamificationStateNotifier extends ChangeNotifier {
   /// Same shape as a first install: [load] would zero these anyway once
   /// the keys are gone, but memory needs the explicit clear or the new
   /// account inherits the old account's XP and streak.
-  void resetForNewAccount() {
+  Future<void> resetForNewAccount() async {
     _comboTimer?.cancel();
     _totalXp = 0;
     _tokens = 0;
@@ -307,10 +321,27 @@ class GamificationStateNotifier extends ChangeNotifier {
     _doneDayIso = null;
     _doneCount = 0;
     _nudgedDayIso = null;
-    _lastGainTaskId = null;
-    _lastGain = null;
-    _persist();
+    _ritualDayIso = null;
+    _taskGains.clear();
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in [
+        _kXp,
+        _kTokens,
+        _kStreak,
+        _kLastDay,
+        _kGraceMonth,
+        _kGraceUsed,
+        _kDoneDay,
+        _kDoneCount,
+        _kNudgedDay,
+        _kTaskGains,
+        _kRitualDay,
+      ]) {
+        await prefs.remove(key);
+      }
+    } catch (_) {}
   }
 
   /// Demo helper: back to a fresh Seedling.
@@ -326,8 +357,8 @@ class GamificationStateNotifier extends ChangeNotifier {
     _doneDayIso = _dayKey(DateTime.now());
     _doneCount = 0;
     _nudgedDayIso = null;
-    _lastGainTaskId = null;
-    _lastGain = null;
+    _ritualDayIso = null;
+    _taskGains.clear();
     _persist();
     notifyListeners();
   }
@@ -346,6 +377,19 @@ class GamificationStateNotifier extends ChangeNotifier {
       _doneDayIso = prefs.getString(_kDoneDay);
       _doneCount = prefs.getInt(_kDoneCount) ?? 0;
       _nudgedDayIso = prefs.getString(_kNudgedDay);
+      _ritualDayIso = prefs.getString(_kRitualDay);
+      final rawGains = prefs.getString(_kTaskGains);
+      if (rawGains != null) {
+        final decoded = jsonDecode(rawGains);
+        if (decoded is Map) {
+          _taskGains
+            ..clear()
+            ..addAll(decoded.map((key, value) => MapEntry(
+                  '$key',
+                  (value as num).toInt(),
+                )));
+        }
+      }
       // One-time purge of the removed stake/wilt keys (v1.0 punishment
       // mechanics). Best-effort — a failing remove must not block boot.
       for (final key in _legacyStakeKeys) {
@@ -372,8 +416,12 @@ class GamificationStateNotifier extends ChangeNotifier {
         await prefs.setString(_kDoneDay, _doneDayIso!);
       }
       await prefs.setInt(_kDoneCount, _doneCount);
+      await prefs.setString(_kTaskGains, jsonEncode(_taskGains));
       if (_nudgedDayIso != null) {
         await prefs.setString(_kNudgedDay, _nudgedDayIso!);
+      }
+      if (_ritualDayIso != null) {
+        await prefs.setString(_kRitualDay, _ritualDayIso!);
       }
     } catch (_) {
       // Persistence is a bonus — gameplay continues in memory.
@@ -382,6 +430,7 @@ class GamificationStateNotifier extends ChangeNotifier {
 
   void _scheduleComboExpiry() {
     _comboTimer?.cancel();
+    if (!timersEnabled) return;
     final exp = _comboExpiresAt;
     if (exp == null) return;
     final wait = exp.difference(DateTime.now());

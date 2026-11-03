@@ -318,7 +318,7 @@ class _PressableState extends State<Pressable> {
 /// Rolling integer counter: tweens from the previous value to the new
 /// one (600ms ease-out) so XP / token tallies read as "growing" instead
 /// of snapping. First paint animates up from zero.
-class AnimatedInt extends StatelessWidget {
+class AnimatedInt extends StatefulWidget {
   final int value;
   final TextStyle? style;
   final String Function(int value)? formatter;
@@ -333,14 +333,29 @@ class AnimatedInt extends StatelessWidget {
   });
 
   @override
+  State<AnimatedInt> createState() => _AnimatedIntState();
+}
+
+class _AnimatedIntState extends State<AnimatedInt> {
+  int _from = 0;
+
+  @override
+  void didUpdateWidget(covariant AnimatedInt oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value) {
+      _from = oldWidget.value;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<int>(
-      tween: IntTween(begin: 0, end: value),
-      duration: duration,
+      tween: IntTween(begin: _from, end: widget.value),
+      duration: widget.duration,
       curve: Curves.easeOut,
       builder: (context, v, _) => Text(
-        formatter?.call(v) ?? '$v',
-        style: style,
+        widget.formatter?.call(v) ?? '$v',
+        style: widget.style,
       ),
     );
   }

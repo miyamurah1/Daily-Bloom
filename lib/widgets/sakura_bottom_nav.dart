@@ -28,7 +28,7 @@ class SakuraBottomNav extends StatelessWidget {
 
   static const labels = [
     'Today',
-    'Habits',
+    'Rituals',
     'Folders',
     'Insights',
   ];
@@ -63,6 +63,7 @@ class SakuraBottomNav extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   child: Semantics(
                     button: true,
+                    selected: active,
                     label: SakuraBottomNav.labels[i],
                     child: AnimatedContainer(
                       duration: AppMotion.nav,

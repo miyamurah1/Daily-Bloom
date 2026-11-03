@@ -18,8 +18,8 @@ void main() {
     // Splash first (restore is async), then welcome gate. Avoid
     // pumpAndSettle: the splash spinner never "settles".
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 1600));
 
     expect(find.text('Daily Bloom'), findsOneWidget);
     expect(find.text('Continue as Guest'), findsOneWidget);
@@ -30,10 +30,26 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(const DailyBloomApp());
     await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 1600));
 
     expect(find.text('One task. One timer. One focus.'), findsOneWidget);
-    expect(find.textContaining('Add up to 3 tasks'), findsOneWidget);
+    expect(find.textContaining('up to 3 tasks'), findsOneWidget);
+  });
+
+  testWidgets('guest entry shows onboarding before the app shell',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(const DailyBloomApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1600));
+    await tester.pump(const Duration(milliseconds: 1600));
+
+    await tester.tap(find.text('Continue as Guest'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Welcome to Daily Bloom'), findsOneWidget);
+    expect(find.text('Complete tasks. See proof. Grow.'), findsOneWidget);
   });
 }

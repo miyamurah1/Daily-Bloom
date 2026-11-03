@@ -11,6 +11,95 @@ app.get('/api/wallet', requireAuth, async (req, res) => {
   }
 });
 
+// Claim the daily ritual reward. The UTC day is used as the idempotency key so
+// a retry after a lost response cannot mint the reward twice.
+app.post('/api/wallet/daily-ritual', requireAuth, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450)
+       ON CONFLICT (user_id) DO NOTHING`, [req.userId]);
+    const { rows: wallet } = await client.query(
+      'SELECT balance FROM user_tokens WHERE user_id = $1 FOR UPDATE', [req.userId]);
+    const { rows: day } = await client.query("SELECT CURRENT_DATE::text AS day");
+    const key = `daily-ritual:${day[0].day}`;
+    const { rows: existing } = await client.query(
+      `SELECT delta FROM wallet_transactions
+       WHERE user_id = $1 AND idempotency_key = $2`, [req.userId, key]);
+    if (existing.length) {
+      await client.query('COMMIT');
+      return res.json({
+        balance: wallet[0].balance,
+        awarded: 0,
+        alreadyClaimed: true,
+      });
+    }
+    await client.query(
+      `UPDATE user_tokens SET balance = balance + 25, updated_at = now()
+       WHERE user_id = $1`, [req.userId]);
+    await client.query(
+      `INSERT INTO wallet_transactions (user_id, idempotency_key, delta, reason)
+       VALUES ($1, $2, 25, 'daily_ritual')`, [req.userId, key]);
+    const { rows: updated } = await client.query(
+      'SELECT balance FROM user_tokens WHERE user_id = $1', [req.userId]);
+    await client.query('COMMIT');
+    return res.json({ balance: updated[0].balance, awarded: 25, alreadyClaimed: false });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[wallet] daily ritual failed:', e?.code ?? e?.message ?? e);
+    return res.status(500).json({ error: 'could not claim daily ritual' });
+  } finally {
+    client.release();
+  }
+});
+
+// Spend the fixed price of a habit thaw. The action is deliberately allow
+// listed; clients cannot use this endpoint to debit or credit arbitrary sums.
+app.post('/api/wallet/spend', requireAuth, async (req, res) => {
+  const action = String(req.body?.action ?? '');
+  const key = String(req.body?.idempotency_key ?? '').trim().slice(0, 160);
+  if (action !== 'habit_unfreeze' || !key) {
+    return res.status(400).json({ error: 'invalid wallet action' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450)
+       ON CONFLICT (user_id) DO NOTHING`, [req.userId]);
+    const { rows: wallet } = await client.query(
+      'SELECT balance FROM user_tokens WHERE user_id = $1 FOR UPDATE', [req.userId]);
+    const { rows: existing } = await client.query(
+      `SELECT delta FROM wallet_transactions
+       WHERE user_id = $1 AND idempotency_key = $2`, [req.userId, key]);
+    if (existing.length) {
+      await client.query('COMMIT');
+      return res.json({ balance: wallet[0].balance, spent: 0, alreadyApplied: true });
+    }
+    if (wallet[0].balance < 500) {
+      await client.query('ROLLBACK');
+      return res.status(402).json({ error: 'not enough tokens to unfreeze this habit' });
+    }
+    await client.query(
+      `UPDATE user_tokens SET balance = balance - 500, updated_at = now()
+       WHERE user_id = $1`, [req.userId]);
+    await client.query(
+      `INSERT INTO wallet_transactions (user_id, idempotency_key, delta, reason)
+       VALUES ($1, $2, -500, 'habit_unfreeze')`, [req.userId, key]);
+    const { rows: updated } = await client.query(
+      'SELECT balance FROM user_tokens WHERE user_id = $1', [req.userId]);
+    await client.query('COMMIT');
+    return res.json({ balance: updated[0].balance, spent: 500, alreadyApplied: false });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[wallet] spend failed:', e?.code ?? e?.message ?? e);
+    return res.status(500).json({ error: 'could not spend wallet tokens' });
+  } finally {
+    client.release();
+  }
+});
+
 app.get('/api/inbox', requireAuth, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit ?? '50', 10) || 50, 200);
@@ -67,35 +156,37 @@ app.post('/api/store/buy', requireAuth, async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const { rows: owned } = await client.query(
-        'SELECT 1 FROM owned_themes WHERE user_id = $1 AND theme_id = $2',
-        [req.userId, id]);
-      if (owned.length) {
-        await client.query('ROLLBACK');
-        return res.json({ ok: true, owned: true });
-      }
+      // Lock the wallet before checking ownership. Otherwise two concurrent
+      // buy requests can both pass the ownership check and deduct twice.
+      await client.query(
+        `INSERT INTO user_tokens (user_id, balance) VALUES ($1, 450)
+         ON CONFLICT (user_id) DO NOTHING`, [req.userId]);
       const { rows: wallet } = await client.query(
         'SELECT balance FROM user_tokens WHERE user_id = $1 FOR UPDATE',
         [req.userId]);
-      const balance = wallet.length ? wallet[0].balance : 450;
+      const balance = wallet[0].balance;
+      // Claim ownership while the wallet row is locked. The unique key makes
+      // concurrent taps deterministic: only the request that inserted the
+      // ownership row may charge the balance.
+      const { rows: inserted } = await client.query(
+        `INSERT INTO owned_themes (user_id, theme_id)
+         VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING theme_id`,
+        [req.userId, id]);
+      if (!inserted.length) {
+        await client.query('ROLLBACK');
+        return res.json({ ok: true, owned: true });
+      }
       if (balance < theme.price) {
         await client.query('ROLLBACK');
         return res.status(402).json({ error: 'not enough tokens — complete tasks and flows to earn more' });
       }
-      if (!wallet.length) {
-        await client.query(
-          'INSERT INTO user_tokens (user_id, balance) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING',
-          [req.userId, 450 - theme.price]);
-      } else {
-        await client.query(
-          'UPDATE user_tokens SET balance = balance - $2, updated_at = now() WHERE user_id = $1',
-          [req.userId, theme.price]);
-      }
-      // Double-tap buy race: both requests passed the owned-check above —
-      // the loser no-ops instead of rolling back with a 500.
       await client.query(
-        'INSERT INTO owned_themes (user_id, theme_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [req.userId, id]);
+        'UPDATE user_tokens SET balance = balance - $2, updated_at = now() WHERE user_id = $1',
+        [req.userId, theme.price]);
+      await client.query(
+        `INSERT INTO wallet_transactions (user_id, idempotency_key, delta, reason)
+         VALUES ($1, $2, $3, 'theme_purchase')`,
+        [req.userId, `theme:${id}`, -theme.price]);
       await client.query('COMMIT');
       res.status(201).json({ ok: true });
     } catch (e) {

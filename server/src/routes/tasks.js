@@ -1,6 +1,42 @@
 // Tasks, subtasks, notes, timeline, search, export, reorder.
 import { publicUser } from '../lib/auth.js';
 
+const VALID_STATUS = new Set(['todo', 'in_progress', 'done']);
+const VALID_PRIORITY = new Set(['none', 'low', 'medium', 'high']);
+const VALID_RECURRING = new Set(['none', 'daily', 'weekdays', 'weekly', 'monthly']);
+
+function taskPayloadError(body, { create = false } = {}) {
+  const value = body ?? {};
+  if (create && (!value.title || !String(value.title).trim())) return 'title required';
+  if (!create && value.title !== undefined && !String(value.title).trim()) {
+    return 'title cannot be empty';
+  }
+  if (value.status !== undefined && !VALID_STATUS.has(value.status)) {
+    return 'invalid status';
+  }
+  if (value.priority !== undefined && !VALID_PRIORITY.has(value.priority)) {
+    return 'invalid priority';
+  }
+  if (value.recurring !== undefined && !VALID_RECURRING.has(value.recurring)) {
+    return 'invalid recurring value';
+  }
+  if (value.position !== undefined &&
+      (!Number.isInteger(value.position) || value.position < 0)) {
+    return 'position must be a non-negative integer';
+  }
+  if (value.due_at !== undefined && value.due_at !== null &&
+      (typeof value.due_at !== 'string' || Number.isNaN(Date.parse(value.due_at)))) {
+    return 'due_at must be a valid ISO date';
+  }
+  if (value.folder !== undefined && !String(value.folder).trim()) {
+    return 'folder cannot be empty';
+  }
+  if (value.tag !== undefined && !String(value.tag).trim()) {
+    return 'tag cannot be empty';
+  }
+  return null;
+}
+
 export function registerTaskRoutes(app, { pool, requireAuth, logEvent, runRules }) {
 // --- Existing app routes (now require a valid Bearer token) ---
 
@@ -57,6 +93,8 @@ app.get('/api/tasks', requireAuth, async (req, res) => {
 
 app.post('/api/tasks', requireAuth, async (req, res) => {
   try {
+    const payloadError = taskPayloadError(req.body, { create: true });
+    if (payloadError) return res.status(400).json({ error: payloadError });
     const {
       title,
       tag = 'General',
@@ -68,13 +106,13 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
       recurring = 'none',
       position = 0,
     } = req.body;
-    if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
     const cleanTitle = String(title).trim().slice(0, 500);
     const cleanTag = String(tag).trim().slice(0, 60) || 'General';
     const cleanFolder = String(folder).trim().slice(0, 80) || 'Productivity';
     const cleanDesc = String(description ?? '').trim().slice(0, 5000);
-    const cleanPriority = ['none', 'low', 'medium', 'high'].includes(priority) ? priority : 'none';
-    const cleanRecurring = ['none', 'daily', 'weekdays', 'weekly', 'monthly'].includes(recurring) ? recurring : 'none';
+    const cleanPriority = priority;
+    const cleanRecurring = recurring;
+    const cleanAvatar = String(avatar_label ?? '禅').trim().slice(0, 30) || '禅';
 
     // Auto-create folder if it doesn't exist for user
     await pool.query(
@@ -101,7 +139,7 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO tasks (title, tag, status, folder, avatar_label, description, priority, recurring, position, due_at, user_id, client_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [cleanTitle, cleanTag, status, cleanFolder, avatar_label, cleanDesc, cleanPriority, cleanRecurring, position, due, req.userId, clientId],
+      [cleanTitle, cleanTag, status, cleanFolder, cleanAvatar, cleanDesc, cleanPriority, cleanRecurring, position, due, req.userId, clientId],
     ).catch(async (e) => {
       // Double-submit race: both requests passed the client_id dup-check
       // above, the loser hits the unique constraint — return the
@@ -123,6 +161,8 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
 
 app.patch('/api/tasks/:id', requireAuth, async (req, res) => {
   try {
+    const payloadError = taskPayloadError(req.body);
+    if (payloadError) return res.status(400).json({ error: payloadError });
     const { status, title, tag, description, priority, folder, recurring, position } = req.body ?? {};
     const hasDue = req.body && Object.prototype.hasOwnProperty.call(req.body, 'due_at');
     const due = hasDue ? (req.body.due_at || null) : null;

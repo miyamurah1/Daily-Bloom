@@ -459,6 +459,41 @@ class BloomApi {
     return (jsonDecode(res.body)['balance'] as num?)?.toInt() ?? 450;
   }
 
+  Future<WalletMutation> claimDailyRitual() async {
+    final uri = Uri.parse('$baseUrl/api/wallet/daily-ritual');
+    final res = await _client
+        .post(uri, headers: await _headers)
+        .timeout(timeout);
+    if (res.statusCode == 401) {
+      AuthStore.instance.logout();
+      throw const AuthExpiredException();
+    }
+    if (res.statusCode != 200) throw Exception('daily ritual ${res.statusCode}');
+    return WalletMutation.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
+  Future<WalletMutation> spendWallet({
+    required String action,
+    required String idempotencyKey,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/wallet/spend');
+    final res = await _client
+        .post(uri,
+            headers: await _headers,
+            body: jsonEncode({
+              'action': action,
+              'idempotency_key': idempotencyKey,
+            }))
+        .timeout(timeout);
+    if (res.statusCode == 401) {
+      AuthStore.instance.logout();
+      throw const AuthExpiredException();
+    }
+    if (res.statusCode == 402) throw AuthException(_storeMsg(res.body));
+    if (res.statusCode != 200) throw Exception('wallet spend ${res.statusCode}');
+    return WalletMutation.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+  }
+
   Future<List<InboxMessage>> fetchInbox({int limit = 50}) async {
     final uri = Uri.parse('$baseUrl/api/inbox?limit=$limit');
     final res = await _client.get(uri, headers: await _headers).timeout(timeout);
@@ -1072,6 +1107,27 @@ class HealthProbe {
   final String? detail;
 
   const HealthProbe({required this.ok, required this.firebaseReady, this.detail});
+}
+
+class WalletMutation {
+  final int balance;
+  final int amount;
+  final bool alreadyApplied;
+
+  const WalletMutation({
+    required this.balance,
+    required this.amount,
+    this.alreadyApplied = false,
+  });
+
+  factory WalletMutation.fromJson(Map<String, dynamic> json) => WalletMutation(
+        balance: (json['balance'] as num?)?.toInt() ?? 0,
+        amount: (json['awarded'] as num?)?.toInt() ??
+            (json['spent'] as num?)?.toInt() ??
+            0,
+        alreadyApplied: json['alreadyClaimed'] == true ||
+            json['alreadyApplied'] == true,
+      );
 }
 
 /// Rule-based personal feedback. Pure function of [Insights] — no ML,

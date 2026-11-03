@@ -14,6 +14,15 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
+val buildingRelease = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+if (buildingRelease && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "Release signing is not configured. Create android/key.properties " +
+            "from android/key.properties.example before building a release."
+    )
+}
 
 android {
     namespace = "com.dailybloom.app"
@@ -44,13 +53,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Uses your keystore once android/key.properties exists.
-            signingConfig = if (keystorePropertiesFile.exists()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

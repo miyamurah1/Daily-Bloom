@@ -78,6 +78,14 @@ describe('auth', () => {
   });
 
   it('deletes the account and wipes its data', async () => {
+    const firstClaim = await api('POST', '/api/wallet/daily-ritual', { token });
+    assert.equal(firstClaim.status, 200);
+    assert.equal(firstClaim.json.awarded, 25);
+    const retryClaim = await api('POST', '/api/wallet/daily-ritual', { token });
+    assert.equal(retryClaim.status, 200);
+    assert.equal(retryClaim.json.alreadyClaimed, true);
+    assert.equal(retryClaim.json.balance, 475);
+
     const del = await api('DELETE', '/api/auth/account', { token });
     assert.equal(del.status, 200);
     // Bypass re-creates a FRESH row on next use — assert the wipe:

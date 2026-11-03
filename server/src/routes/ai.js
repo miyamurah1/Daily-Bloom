@@ -1,7 +1,7 @@
 // AI proxy routes. Moved verbatim from src/index.js (route split).
 // No logic changes.
 import rateLimit from 'express-rate-limit';
-import { aiComplete, checkCap, localFor } from '../ai.js';
+import { aiComplete, checkPersistentCap, localFor } from '../ai.js';
 
 // --- AI proxy: Gemini 2.5 Flash-Lite primary, Groq fallback, local last ---
 // Keys stay server-side. Per-user daily cap degrades to local heuristics
@@ -14,7 +14,7 @@ const aiLimiter = rateLimit({
   message: { error: 'too many ai requests — try again in a few minutes' },
 });
 
-export function registerAiRoutes(app, { requireAuth }) {
+export function registerAiRoutes(app, { requireAuth, pool }) {
 async function aiHandler(kind, req, res) {
   try {
     const taskPayload = (max) => ({
@@ -44,7 +44,7 @@ async function aiHandler(kind, req, res) {
     if (kind === 'ask' && !String(payload.question).trim()) {
       return res.status(400).json({ error: 'question is required' });
     }
-    const allowed = checkCap(req.userId);
+    const allowed = await checkPersistentCap(pool, req.userId);
     if (!allowed) {
       return res.json({ data: localFor(kind, payload), model: 'local-heuristic', fallback: true, capped: true });
     }

@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
+
 /// Drifting cherry-blossom petals behind auth screens. One looping
 /// controller, ~12 petals on phones, all math — no assets, no packages.
 /// Pure decoration: remove this wrapper and nothing else changes.
@@ -82,6 +84,16 @@ class _PetalRainState extends State<PetalRain>
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _ctrl.stop();
+    } else if (!_ctrl.isAnimating) {
+      _ctrl.repeat();
+    }
   }
 
   @override

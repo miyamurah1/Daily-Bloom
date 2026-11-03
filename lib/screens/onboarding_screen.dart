@@ -17,20 +17,27 @@ import '../widgets/motion.dart';
 /// AppShell on first run.
 class OnboardingScreen extends StatefulWidget {
   final VoidCallback onDone;
+  /// Allows guest onboarding to have its own completion state instead of
+  /// inheriting a signed-in account's device-level flag.
+  final String completionKey;
 
   /// SharedPreferences flag written when the user reaches the end (or
   /// taps Skip).
   static const seenKey = 'bloom_onboarding_seen_v1';
 
-  const OnboardingScreen({super.key, required this.onDone});
+  const OnboardingScreen({
+    super.key,
+    required this.onDone,
+    this.completionKey = seenKey,
+  });
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _controller = PageController();
-  int _page = 0;
+  final _pageNotifier = ValueNotifier<int>(0);
+  int get _page => _pageNotifier.value;
 
   // Step 4 personalization — all optional; Skip never seeds anything.
   String _name = '';
@@ -41,14 +48,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pageNotifier.dispose();
     super.dispose();
   }
 
   Future<void> _finish({bool personalize = true}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(OnboardingScreen.seenKey, true);
+       await prefs.setBool(widget.completionKey, true);
     } catch (_) {}
     if (personalize) {
       // Name powers the home greeting; the chosen focus plants one tiny
@@ -79,74 +86,124 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     widget.onDone();
   }
 
+  Widget _buildStep(int page) {
+    Widget step;
+    switch (page) {
+      case 0:
+        step = const _Slide(
+          icon: LucideIcons.flower,
+          title: 'Welcome to Daily Bloom',
+          subtitle: 'Complete tasks. See proof. Grow.',
+        );
+      case 1:
+        step = const _Slide(
+          icon: LucideIcons.flame,
+          title: 'Complete tasks → grow your heatmap',
+          subtitle: 'Every finished bloom paints a square and earns XP.',
+          showHeatmap: true,
+        );
+      case 2:
+        step = const _Slide(
+          icon: LucideIcons.sparkles,
+          title: 'Set intentions → build streaks → collect blooms',
+          subtitle: 'Small steps, tended daily, become a garden.',
+        );
+      case 3:
+        step = _PersonalizeStep(
+          name: _name,
+          firstTask: _firstTask,
+          focusIndex: _focusIndex,
+          reminderOn: _wantReminder,
+          simpleOn: _simpleMode,
+          onName: (v) => setState(() => _name = v),
+          onFirstTask: (v) => setState(() => _firstTask = v),
+          onFocus: (i) => setState(() => _focusIndex = i),
+          onReminder: (v) => setState(() => _wantReminder = v),
+          onSimple: (v) => setState(() => _simpleMode = v),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+    return KeyedSubtree(
+      key: ValueKey<int>(page),
+      child: step,
+    );
+  }
+
   void _next() {
     if (_page >= 3) {
       _finish(personalize: true);
       return;
     }
-    _controller.nextPage(
-      duration: AppMotion.pageTurn,
-      curve: AppMotion.pageTurnCurve,
-    );
+    _pageNotifier.value = _pageNotifier.value + 1;
   }
 
   @override
   Widget build(BuildContext context) {
-    final last = _page >= 3;
     return Scaffold(
       backgroundColor: SakuraColors.background,
-      body: Entrance(
-        delayMs: 80,
-        child: SafeArea(
-        child: Column(
+      body: Stack(
+        children: [
+          // Soft brand glow behind the slides.
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.3),
+                  radius: 1.1,
+                  colors: [
+                    SakuraColors.primary.withValues(alpha: 0.12),
+                    SakuraColors.background,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Entrance(
+            delayMs: 80,
+            child: SafeArea(
+              child: Column(
           children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: _page < 3
-                  ? TextButton(
-                      onPressed: () => _finish(personalize: false),
-                      child: Text(
-                        'Skip',
-                        style: TextStyle(color: SakuraColors.inkSoft),
-                      ),
-                    )
-                  : const SizedBox(height: 40),
+            ValueListenableBuilder<int>(
+              valueListenable: _pageNotifier,
+              builder: (context, page, _) {
+                return Align(
+                  alignment: Alignment.topRight,
+                  child: page < 3
+                      ? TextButton(
+                          onPressed: () => _finish(personalize: false),
+                          child: Text(
+                            'Skip',
+                            style: TextStyle(color: SakuraColors.inkSoft),
+                          ),
+                        )
+                      : const SizedBox(height: 40),
+                );
+              },
             ),
             Expanded(
-              child: PageView(
-                controller: _controller,
-                onPageChanged: (i) => setState(() => _page = i),
-                children: [
-                  const _Slide(
-                    icon: LucideIcons.flower,
-                    title: 'Welcome to Daily Bloom',
-                    subtitle: 'Complete tasks. See proof. Grow.',
-                  ),
-                  const _Slide(
-                    icon: LucideIcons.flame,
-                    title: 'Complete tasks → grow your heatmap',
-                    subtitle:
-                        'Every finished bloom paints a square and earns XP.',
-                    showHeatmap: true,
-                  ),
-                  const _Slide(
-                    icon: LucideIcons.sparkles,
-                    title: 'Set intentions → build streaks → collect blooms',
-                    subtitle: 'Small steps, tended daily, become a garden.',
-                  ),
-                  _PersonalizeStep(
-                    name: _name,
-                    firstTask: _firstTask,
-                    focusIndex: _focusIndex,
-                    reminderOn: _wantReminder,
-                    simpleOn: _simpleMode,
-                    onName: (v) => setState(() => _name = v),
-                    onFirstTask: (v) => setState(() => _firstTask = v),
-                    onFocus: (i) => setState(() => _focusIndex = i),
-                    onReminder: (v) => setState(() => _wantReminder = v),
-                    onSimple: (v) => setState(() => _simpleMode = v),
-                  ),
-                ],
+              child: ValueListenableBuilder<int>(
+                valueListenable: _pageNotifier,
+                builder: (context, page, _) {
+                  return AnimatedSwitcher(
+                    duration: AppMotion.pageTurn,
+                    transitionBuilder: (child, animation) {
+                      final tween = Tween<Offset>(
+                          begin: const Offset(1.15, 0), end: Offset.zero);
+                      return SlideTransition(
+                        position: tween.animate(
+                          CurvedAnimation(
+                              parent: animation, curve: Curves.easeOut),
+                        ),
+                        child: FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: _buildStep(page),
+                  );
+                },
               ),
             ),
             // Dots: Wrap, not Row — at 1.3x text scale with a narrow
@@ -173,35 +230,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               }),
             ),
             const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: Semantics(
-                  button: true,
-                  label: last ? 'Enter my garden' : 'Next',
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: SakuraColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+            ValueListenableBuilder<int>(
+              valueListenable: _pageNotifier,
+              builder: (context, page, _) {
+                final last = page >= 3;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Semantics(
+                      button: true,
+                      label: last ? 'Enter my garden' : 'Next',
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: SakuraColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        onPressed: _next,
+                        child: Text(
+                          last ? 'Enter my garden' : 'Next',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                       ),
                     ),
-                    onPressed: (last && _name.trim().isEmpty) ? null : _next,
-                    child: Text(
-                      last ? 'Enter my garden' : 'Next',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
             const SizedBox(height: 24),
           ],
         ),
       ),
       ),
+      ],
+    ),
     );
   }
 }
@@ -240,17 +305,35 @@ class _Slide extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(26),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
                 colors: [
-                  SakuraColors.primary.withValues(alpha: 0.22),
-                  SakuraColors.primary.withValues(alpha: 0.06),
+                  SakuraColors.primary.withValues(alpha: 0.30),
+                  SakuraColors.primary.withValues(alpha: 0.08),
                 ],
               ),
-              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: SakuraColors.primary.withValues(alpha: 0.28),
+                  blurRadius: 32,
+                  spreadRadius: 4,
+                ),
+              ],
             ),
-            child: Icon(icon, size: 42, color: SakuraColors.primary),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: SakuraColors.background.withValues(alpha: 0.6),
+                border: Border.all(
+                  color: SakuraColors.primary.withValues(alpha: 0.25),
+                  width: 1.2,
+                ),
+              ),
+              child: Icon(icon, size: 44, color: SakuraColors.primary),
+            ),
           ),
           const SizedBox(height: 22),
           if (showHeatmap) ...[

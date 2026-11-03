@@ -31,6 +31,8 @@ const ORDER = [
   'migration_015_subtask_completion.sql',
   'migration_016_midnight_free.sql',
   'migration_017_free_focus.sql',
+  'migration_018_wallet_transactions.sql',
+  'migration_019_ai_usage.sql',
 ];
 
 const pool = new pg.Pool({
@@ -42,32 +44,41 @@ const pool = new pg.Pool({
       : undefined,
 });
 
-await pool.query(
-  `CREATE TABLE IF NOT EXISTS schema_migrations (
-     name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+const client = await pool.connect();
+try {
+  // Keep the advisory lock and all migration queries on the same session.
+  // This prevents two application instances from applying the same file.
+  await client.query('SELECT pg_advisory_lock(hashtext($1))', ['daily_bloom:migrations']);
+  await client.query(
+    `CREATE TABLE IF NOT EXISTS schema_migrations (
+       name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
 
-const { rows: done } = await pool.query('SELECT name FROM schema_migrations');
-const applied = new Set(done.map((r) => r.name));
+  const { rows: done } = await client.query('SELECT name FROM schema_migrations');
+  const applied = new Set(done.map((r) => r.name));
 
-for (const file of ORDER) {
-  if (applied.has(file)) {
-    console.log(`- skip ${file}`);
-    continue;
+  for (const file of ORDER) {
+    if (applied.has(file)) {
+      console.log(`- skip ${file}`);
+      continue;
+    }
+    const sql = fs.readFileSync(path.join(dbDir, file), 'utf8');
+    console.log(`+ apply ${file}`);
+    // One transaction per file: a failed migration leaves no half state,
+    // and the next run retries it cleanly (files are re-runnable).
+    await client.query('BEGIN');
+    try {
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    }
   }
-  const sql = fs.readFileSync(path.join(dbDir, file), 'utf8');
-  console.log(`+ apply ${file}`);
-  // One transaction per file: a failed migration leaves no half state,
-  // and the next run retries it cleanly (files are re-runnable).
-  await pool.query('BEGIN');
-  try {
-    await pool.query(sql);
-    await pool.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
-    await pool.query('COMMIT');
-  } catch (e) {
-    await pool.query('ROLLBACK');
-    throw e;
-  }
+
+  console.log('migrations up to date');
+  await client.query('SELECT pg_advisory_unlock(hashtext($1))', ['daily_bloom:migrations']);
+} finally {
+  client.release();
+  await pool.end();
 }
-
-console.log('migrations up to date');
-await pool.end();

@@ -9,14 +9,6 @@ import 'dart:math';
 /// Sakura Bloom 71-100.
 enum BloomRank { seedling, sprout, bonsai, lotus, sakura }
 
-/// Variable reward from a daily ritual.
-class MysteryReward {
-  final int tokens;
-  final bool isCritical;
-
-  const MysteryReward(this.tokens, {this.isCritical = false});
-}
-
 /// Tunables in one place — balance the whole game here.
 abstract class BloomEngine {
   static const int maxLevel = 100;
@@ -26,14 +18,6 @@ abstract class BloomEngine {
 
   /// Base XP per task before combo bonus.
   static const int baseTaskXp = 50;
-
-  /// Odds: 70% → 10, 25% → 50, 5% → 250 (Critical Bloom).
-  static MysteryReward rollMysteryBloom([Random? random]) {
-    final r = (random ?? Random()).nextDouble();
-    if (r < 0.70) return const MysteryReward(10);
-    if (r < 0.95) return const MysteryReward(50);
-    return const MysteryReward(250, isCritical: true);
-  }
 
   /// XP needed to go from [level] to [level + 1].
   /// Exponential: 100 * 1.12^(level-1). L1→120ish, L100→~8M.

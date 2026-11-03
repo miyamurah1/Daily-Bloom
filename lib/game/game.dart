@@ -16,6 +16,5 @@ export 'dynamic_bloom_background.dart';
 export 'flow_state_juice.dart';
 export 'gamification_state.dart';
 export 'habit_tracker.dart';
-export 'mystery_bloom_overlay.dart';
 export 'seasonal_journey_track.dart';
 export 'token_economy.dart';

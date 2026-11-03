@@ -13,6 +13,7 @@ import 'data/api_client.dart';
 import 'data/auth_store.dart';
 import 'data/crash_reports.dart';
 import 'data/energy_store.dart';
+import 'data/privacy_preferences.dart';
 import 'data/reminders.dart';
 import 'data/simple_mode.dart';
 import 'firebase_options.dart';
@@ -45,6 +46,7 @@ void main() async {
     GamificationStateNotifier.instance.load(),
     // Energy labels are local-first: cards never flash unlabeled.
     EnergyStore.instance.load(),
+    PrivacyPreferences.instance.load(),
     // Ambient preference is local-only; the wash stays off until a
     // session starts it.
     AmbientSound.load(),
@@ -67,7 +69,8 @@ void main() async {
     ]).timeout(const Duration(milliseconds: 1200)),
   ]);
   } catch (_) {}
-  GamificationStateNotifier.instance.markDailyActive(null, true);
+  // A streak represents meaningful activity, not merely opening the app.
+  // Task, habit, and focus completion paths advance it explicitly.
   // Keep tomorrow's nudge copy truthful: the daily body tracks the live
   // streak, so re-arm the (cheap, inexact) alarm on every change.
   GamificationStateNotifier.onStreakChanged =

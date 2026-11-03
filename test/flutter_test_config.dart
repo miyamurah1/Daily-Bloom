@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:daily_bloom/data/task_repository.dart';
+import 'package:daily_bloom/game/gamification_state.dart';
 import 'package:daily_bloom/theme/sakura_theme.dart';
 
 /// Global widget-test bootstrap.
@@ -15,5 +17,11 @@ import 'package:daily_bloom/theme/sakura_theme.dart';
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   SakuraTheme.useGoogleFonts = false;
   TaskRepository.autoRetry = false;
+  GamificationStateNotifier.timersEnabled = false;
+  // The repository is a production singleton, but each Flutter test should
+  // start with a clean in-memory cache and a fresh injectable API seam.
+  setUp(() {
+    TaskRepository.instance.debugReset();
+  });
   await testMain();
 }

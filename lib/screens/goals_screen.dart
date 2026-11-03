@@ -6,6 +6,7 @@ import '../data/goal_store.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/bloom_dialog.dart';
 import '../widgets/motion.dart';
+import '../widgets/empty_state.dart';
 
 /// Goals tab — real long-term project goals with target dates and
 /// milestone checklists. Local-first ([GoalStore]): fully offline, no
@@ -86,7 +87,26 @@ class _GoalsScreenState extends State<GoalsScreen> {
               _header(),
               const SizedBox(height: 18),
               if (goals.isEmpty)
-                _EmptyGoals(onCreate: _newGoal)
+                EmptyState(
+        title: 'No long-term goals yet',
+        subtitle: 'Name a mountain — a date and a few steps turn it into a plan.',
+        action: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _newGoal,
+            icon: const Icon(LucideIcons.plus, size: 16),
+            label: const Text('+ New Goal',
+                style: TextStyle(fontWeight: FontWeight.w700)),
+            style: FilledButton.styleFrom(
+              backgroundColor: SakuraColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ),
+      )
               else ...[
                 for (var i = 0; i < goals.length; i++) ...[
                   if (i > 0) const SizedBox(height: 14),
@@ -359,67 +379,12 @@ class _GoalCard extends StatelessWidget {
   }
 }
 
-class _EmptyGoals extends StatelessWidget {
-  final VoidCallback onCreate;
-  const _EmptyGoals({required this.onCreate});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: SakuraTheme.cardDecoration(),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: SakuraColors.primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(LucideIcons.target,
-                size: 22, color: SakuraColors.primary),
-          ),
-          const SizedBox(height: 12),
-          Text('No long-term goals yet',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: SakuraColors.ink)),
-          const SizedBox(height: 6),
-          Text(
-            'Name a mountain — a date and a few steps turn it into a plan.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 12.5, height: 1.55, color: SakuraColors.inkSoft),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: SakuraColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              onPressed: onCreate,
-              icon: const Icon(LucideIcons.plus, size: 16),
-              label: const Text('+ New Goal',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// New-goal sheet: title + optional target date + 1–5 milestone steps.
 class _GoalEditorSheet extends StatefulWidget {
   const _GoalEditorSheet();
 
   @override
-  State<_GoalEditorSheet> createState() => _GoalEditorSheetState();
+  _GoalEditorSheetState createState() => _GoalEditorSheetState();
 }
 
 class _GoalEditorSheetState extends State<_GoalEditorSheet> {

@@ -4,8 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_store.dart';
 import '../data/background_music.dart';
+import '../data/guest_store.dart';
 import '../data/haptics.dart';
 import '../data/tap_sound.dart';
+import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../game/dynamic_bloom_background.dart';
@@ -14,6 +16,7 @@ import '../widgets/petal_rain.dart';
 import 'app_shell.dart';
 import 'login_screen.dart';
 import 'onboarding_screen.dart';
+import 'signup_screen.dart';
 
 /// Route guard — the only place that decides login vs app.
 ///
@@ -27,7 +30,6 @@ class AuthGate extends StatefulWidget {
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
-
 class _AuthGateState extends State<AuthGate> {
   /// null until the first-launch flag has been read. While null and the
   /// user is logged in we keep showing the splash — never a flash of the
@@ -36,6 +38,18 @@ class _AuthGateState extends State<AuthGate> {
 
   /// Whether a guest session has been established (persisted locally).
   bool? _guestMode;
+  bool? _guestOnboardingSeen;
+  static const _guestOnboardingKey = 'bloom_guest_onboarding_seen_v1';
+
+  /// A newly-entered guest must see the first-run explanation even when a
+  /// stale device-level onboarding flag exists from an earlier session.
+  bool _guestOnboardingRequired = false;
+
+  /// Small splash floor so fast launches do not flash, without making every
+  /// returning user wait through a decorative 1.5 second delay.
+  bool _minSplashDone = false;
+  String? _seenFirebaseUid;
+  bool _onboardingRefreshPending = false;
 
   @override
   void initState() {
@@ -43,6 +57,9 @@ class _AuthGateState extends State<AuthGate> {
     AuthStore.instance.restore();
     _loadOnboarding();
     _loadGuestMode();
+    Future.delayed(const Duration(milliseconds: 450), () {
+      if (mounted) setState(() => _minSplashDone = true);
+    });
   }
 
   Future<void> _loadOnboarding() async {
@@ -50,8 +67,9 @@ class _AuthGateState extends State<AuthGate> {
       final prefs = await SharedPreferences.getInstance();
       if (!mounted) return;
       setState(() {
-        _onboardingSeen =
-            prefs.getBool(OnboardingScreen.seenKey) ?? false;
+        _onboardingSeen = _guestOnboardingRequired
+            ? false
+            : (prefs.getBool(OnboardingScreen.seenKey) ?? false);
       });
     } catch (_) {
       // Prefs unavailable (unlikely): don't trap the user in onboarding.
@@ -62,26 +80,59 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _loadGuestMode() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final guest = prefs.getBool('bloom_guest_mode_v1') ?? false;
+      if (guest) {
+        // Restore the repository mode before any guest onboarding action can
+        // create a task; otherwise the first task could attempt the API.
+        await TaskRepository.instance.setGuestMode(true);
+        await GuestStore.instance.load();
+      }
       if (!mounted) return;
       setState(() {
-        _guestMode = prefs.getBool('bloom_guest_mode_v1') ?? false;
+        _guestMode = guest;
+        _guestOnboardingSeen = guest
+            ? (prefs.getBool(_guestOnboardingKey) ?? false)
+            : true;
       });
     } catch (_) {
       if (mounted) setState(() => _guestMode = false);
     }
   }
 
+  /// Account-scoped data wipes can reset the onboarding flag while AuthGate
+  /// itself remains mounted. Re-read it whenever Firebase switches identity
+  /// so a new account cannot inherit another account's completed onboarding.
+  void _refreshOnboardingForAccount(String uid) {
+    if (_seenFirebaseUid == uid || _onboardingRefreshPending) return;
+    _seenFirebaseUid = uid;
+    _onboardingRefreshPending = true;
+    SharedPreferences.getInstance().then((prefs) {
+      if (!mounted) return;
+      setState(() {
+        _onboardingSeen = prefs.getBool(OnboardingScreen.seenKey) ?? false;
+        _onboardingRefreshPending = false;
+      });
+    }).catchError((_) {
+      if (mounted) setState(() => _onboardingRefreshPending = false);
+    });
+  }
+
   /// Enter as guest: persist the flag, mark onboarding seen, open the shell.
   Future<void> _enterGuest() async {
+    // Set this before awaiting SharedPreferences so a concurrent first-run
+    // read cannot win a race and skip the guest onboarding.
+    _guestOnboardingRequired = true;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('bloom_guest_mode_v1', true);
-      // Guests see onboarding too - don't skip it.
+      await prefs.setBool(_guestOnboardingKey, false);
     } catch (_) {}
+    await TaskRepository.instance.setGuestMode(true);
     if (!mounted) return;
     setState(() {
       _guestMode = true;
-      _onboardingSeen = true;
+      _guestOnboardingSeen = false;
+      _onboardingSeen = false;
     });
   }
 
@@ -102,6 +153,8 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<User?>(
       stream: _authState(),
       builder: (context, snapshot) {
+        // Hold the branded splash for ~1.5s on cold start.
+        if (!_minSplashDone) return _splash();
         // Firebase still initialising.
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _splash();
@@ -111,6 +164,8 @@ class _AuthGateState extends State<AuthGate> {
 
         // ---------- Signed in ----------
         if (firebaseUser != null) {
+          _guestOnboardingRequired = false;
+          _refreshOnboardingForAccount(firebaseUser.uid);
           return ListenableBuilder(
             listenable: AuthStore.instance,
             builder: (context, _) {
@@ -150,8 +205,27 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         // ---------- Not signed in ----------
-        // Already a guest → go straight to the shell.
+        _seenFirebaseUid = null;
+        // Do not flash the welcome gate while a persisted guest session is
+        // still being restored. The guest flag must settle before routing,
+        // otherwise a returning guest briefly sees the wrong entry screen.
+        if (_guestMode == null) return _splash();
+        // Already a guest: returning guests who completed onboarding go
+        // straight to the shell; a newly-entered guest gets the same clear
+        // first-run explanation as a signed-in user.
         if (_guestMode == true) {
+          if (_onboardingSeen == null) return _splash();
+          if (_guestOnboardingSeen == null) return _splash();
+          if (!_guestOnboardingSeen!) {
+            return OnboardingScreen(
+              completionKey: _guestOnboardingKey,
+              onDone: () => setState(() {
+                _guestOnboardingRequired = false;
+                _guestOnboardingSeen = true;
+                _onboardingSeen = true;
+              }),
+            );
+          }
           return const AppShell(guest: true);
         }
 
@@ -160,6 +234,7 @@ class _AuthGateState extends State<AuthGate> {
         return WelcomeGate(
           onGuest: _enterGuest,
           onSignIn: onSignIn,
+          onCreateAccount: onCreateAccount,
         );
       },
     );
@@ -173,6 +248,15 @@ class _AuthGateState extends State<AuthGate> {
       ),
     );
       // Once auth succeeds the gate pops this named route itself.
+  }
+
+  void onCreateAccount() {
+    Navigator.of(context).push(
+      SakuraPageRoute(
+        settings: const RouteSettings(name: 'signup'),
+        builder: (_) => const SignupScreen(),
+      ),
+    );
   }
 
   /// Themed splash: resolves through the active Sakura theme so cold
@@ -194,16 +278,37 @@ class _AuthGateState extends State<AuthGate> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '日常',
-                      style: SakuraTheme.display(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 4,
-                        color: SakuraColors.primary,
+                    // Brand logo — a glowing bloom in a soft gradient ring.
+                    _PulseLogo(
+                      child: Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              SakuraColors.primary.withValues(alpha: 0.30),
+                              SakuraColors.primary.withValues(alpha: 0.06),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: SakuraColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 28,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 18),
                     Text(
                       'COMPLETE TASKS · SEE PROOF · GROW',
                       style: TextStyle(
@@ -213,10 +318,10 @@ class _AuthGateState extends State<AuthGate> {
                         color: SakuraColors.inkFaint,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 22),
                     SizedBox(
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: SakuraColors.primary,
@@ -239,13 +344,15 @@ class _AuthGateState extends State<AuthGate> {
 /// user continue as guest or sign in. Signing in simply closes this screen;
 /// the StreamBuilder above detects the new Firebase user and routes to AppShell.
 class WelcomeGate extends StatefulWidget {
-  final VoidCallback onGuest;
+  final Future<void> Function() onGuest;
   final VoidCallback onSignIn;
+  final VoidCallback? onCreateAccount;
 
   const WelcomeGate({
     super.key,
     required this.onGuest,
     required this.onSignIn,
+    this.onCreateAccount,
   });
 
   @override
@@ -255,6 +362,9 @@ class WelcomeGate extends StatefulWidget {
 class _WelcomeGateState extends State<WelcomeGate>
     with SingleTickerProviderStateMixin {
   late final AnimationController _bgCtrl;
+  bool _guestBusy = false;
+  bool _googleBusy = false;
+  String? _error;
 
   @override
   void initState() {
@@ -278,9 +388,42 @@ class _WelcomeGateState extends State<WelcomeGate>
     super.dispose();
   }
 
+  Future<void> _enterGuest() async {
+    if (_guestBusy || _googleBusy) return;
+    setState(() => _guestBusy = true);
+    AppHaptics.select();
+    try {
+      await widget.onGuest();
+    } finally {
+      if (mounted) setState(() => _guestBusy = false);
+    }
+  }
+
+  Future<void> _googleSignIn() async {
+    if (_guestBusy || _googleBusy) return;
+    setState(() {
+      _googleBusy = true;
+      _error = null;
+    });
+    AppHaptics.select();
+    try {
+      final ok = await AuthStore.instance.signInWithGoogle();
+      if (!ok && mounted) {
+        // User cancelled the picker — stay on the gate silently.
+      }
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Google sign-in failed — try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _googleBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final onGuest = widget.onGuest;
     final onSignIn = widget.onSignIn;
     return DynamicBloomBackground(
       streak: 0,
@@ -320,19 +463,44 @@ class _WelcomeGateState extends State<WelcomeGate>
             PetalRain(
               child: SafeArea(
             child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                const SizedBox(height: 40),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                const SizedBox(height: 24),
                 Entrance(
                   delayMs: 80,
-                  child: Text(
-                    '日常',
-                    style: SakuraTheme.display(
-                      fontSize: 40,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 5,
-                      color: SakuraColors.primary,
+                  child: Semantics(
+                    label: 'Daily Bloom logo',
+                    image: true,
+                    child: _PulseLogo(
+                      child: Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              SakuraColors.primary.withValues(alpha: 0.30),
+                              SakuraColors.primary.withValues(alpha: 0.06),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: SakuraColors.primary.withValues(alpha: 0.25),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -342,14 +510,14 @@ class _WelcomeGateState extends State<WelcomeGate>
                   child: Text(
                     'Daily Bloom',
                     style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
                       color: SakuraColors.ink,
                       letterSpacing: -0.5,
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Entrance(
                   delayMs: 220,
                   child: Text(
@@ -362,34 +530,48 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 28),
+                const Entrance(
+                  delayMs: 280,
+                  child: _ValueBullets(),
+                ),
+                const SizedBox(height: 16),
                 Entrance(
-                  delayMs: 300,
+                  delayMs: 320,
                   child: Text(
-                    'Start without an account. Add up to 3 tasks as a guest — '
-                    'create a free account anytime to sync across devices.',
+                    'Start as a guest — up to 3 tasks, no account needed. '
+                    'Create a free account anytime to sync across devices.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12.5,
                       height: 1.5,
                       color: SakuraColors.inkFaint,
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
                 Entrance(
-                  delayMs: 380,
+                  delayMs: 360,
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Pressable(
                         child: FilledButton.icon(
-                          onPressed: onGuest,
-                          icon: const Icon(Icons.person_outline, size: 18),
-                          label: const Text(
-                            'Continue as Guest',
-                            style: TextStyle(
+                          onPressed: (_guestBusy || _googleBusy) ? null : _enterGuest,
+                          icon: _guestBusy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.person_outline, size: 18),
+                          label: Text(
+                            _guestBusy ? 'Starting…' : 'Continue as Guest',
+                            style: const TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 15),
                           ),
                           style: FilledButton.styleFrom(
@@ -406,16 +588,66 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Entrance(
-                  delayMs: 440,
+                  delayMs: 420,
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Pressable(
                         child: OutlinedButton.icon(
-                          onPressed: onSignIn,
+                          onPressed: (_guestBusy || _googleBusy)
+                              ? null
+                              : _googleSignIn,
+                          icon: _googleBusy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'G',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF4285F4),
+                                  ),
+                                ),
+                          label: Text(
+                            _googleBusy ? 'Signing in…' : 'Continue with Google',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 15),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: SakuraColors.ink,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            side: BorderSide(
+                                color: SakuraColors.inkFaint.withValues(alpha: 0.4)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Entrance(
+                  delayMs: 480,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Pressable(
+                        child: OutlinedButton.icon(
+                          onPressed: (_guestBusy || _googleBusy)
+                              ? null
+                              : onSignIn,
                           icon: const Icon(Icons.login, size: 18),
                           label: const Text(
                             'Sign In',
@@ -436,15 +668,165 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
+                if (widget.onCreateAccount != null) ...[
+                  const SizedBox(height: 4),
+                  TextButton(
+                    onPressed: (_guestBusy || _googleBusy)
+                        ? null
+                        : widget.onCreateAccount,
+                    child: Text(
+                      'Create a free account',
+                      style: TextStyle(
+                        color: SakuraColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  'Free · No credit card · Your data stays yours',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: SakuraColors.inkFaint,
+                    letterSpacing: 0.3,
+                  ),
+                ),
                 const SizedBox(height: 24),
               ],
+                ),
+              ),
             ),
           ),
         ),
-      ),
       ],
     ),
   ),
   );
+  }
+}
+
+class _PulseLogo extends StatefulWidget {
+  const _PulseLogo({required this.child});
+  final Widget child;
+  @override
+  State<_PulseLogo> createState() => _PulseLogoState();
+}
+
+class _PulseLogoState extends State<_PulseLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))
+        ..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) {
+        final v = _c.value;
+        final scale = 0.94 + 0.06 * (1 - v);
+        return Transform.scale(scale: scale, child: child);
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _ValueBullets extends StatelessWidget {
+  const _ValueBullets();
+
+  static const _items = <({IconData icon, String title, String subtitle})>[
+    (icon: Icons.view_kanban_outlined, title: 'Tasks & Kanban',
+     subtitle: 'Organize work into columns you control'),
+    (icon: Icons.timer_outlined, title: 'Focus timer',
+     subtitle: 'Pomodoro sessions that bloom when you finish'),
+    (icon: Icons.local_florist_outlined, title: 'Habits & streaks',
+     subtitle: 'Grow a garden one day at a time'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final item in _items)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: SakuraColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(item.icon,
+                      size: 18, color: SakuraColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: SakuraColors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: SakuraColors.inkSoft,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }

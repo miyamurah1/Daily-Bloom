@@ -4,11 +4,11 @@
 > `dailybloom-privacy` page) and paste the URL into Play Console →
 > App content → Privacy policy.
 >
-> BEFORE PUBLISHING: replace `privacy@dailybloom.app` below with the
-> inbox you actually monitor. Everything else is already accurate for
-> the current build (Firebase Auth, AI features, widget, crash reports).
+> Before publishing, host this policy at a public URL and make sure the
+> in-app feedback route is monitored. The app does not promise a separate
+> email support channel.
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-11-03_
 
 Daily Bloom ("the app") is a personal task manager with Kanban boards,
 focus timers, habits, and optional AI planning help.
@@ -16,7 +16,8 @@ focus timers, habits, and optional AI planning help.
 ## Data we collect
 
 - **Account data:** email address and display name, handled by
-  **Firebase Authentication** (email/password or Google sign-in).
+  **Firebase Authentication** (email/password, Google sign-in, or Apple
+  sign-in where configured).
   We never see, store, or log your password — Firebase manages
   credentials, and sign-in tokens refresh automatically.
 - **Your content:** tasks, subtasks, folders, notes, habits, focus
@@ -27,13 +28,13 @@ focus timers, habits, and optional AI planning help.
 
 ## AI features (optional)
 
-Planning, breakdowns, search answers, and the weekly narrative run
+Planning, breakdowns, search answers, and the weekly narrative can run
 through our server proxy to **Google Gemini** and (as fallback) **Groq**.
-Only the minimum text needed (e.g. task titles) is sent, and only when
-you tap an AI action. Their free tiers may use that data to improve
-their models. Don't want that? Simply don't tap the AI actions —
-offline heuristics on your device cover the same features.
-No AI data is sold or used for advertising, by us or anyone else.
+External AI is **off by default**. You must enable External AI suggestions
+in Settings before an external request is made. When enabled, only the
+minimum text needed for the action is sent, and local heuristics remain
+available offline. Review the applicable provider policies before enabling
+the feature. Daily Bloom does not sell AI data or use it for advertising.
 
 ## Voice input, widget, crash reports
 
@@ -48,16 +49,16 @@ No AI data is sold or used for advertising, by us or anyone else.
 - **Home-screen widget** shows your top-3 plan using OS widget
   storage (and the iOS App Group shared with the app). Removing the
   widget removes its data.
-- **Crash reports** (Sentry, anonymous: exception, OS version, app
+- **Crash reports** (Sentry, opt-in: anonymous exception, OS version, app
   version — never task content) are sent only in releases built with
   reporting configured, and you can switch them off any time in
   Settings → Crash reports.
-- **Usage analytics** (Firebase Analytics): anonymous, aggregate
+- **Usage analytics** (Firebase Analytics): pseudonymous aggregate
   events that help us understand whether the app actually helps —
   e.g. account created, task planted, task finished, focus session
   started/completed (duration only), habit checked. **Never** your
-  task titles, notes, email, or any content you write. No advertising
-  or third-party sharing.
+  task titles, notes, email, or any content you write. Firebase may process
+  event data as a service provider; there is no advertising use.
 
 ## How it is used
 
@@ -85,7 +86,9 @@ The app is not directed at children under 13.
 
 ## Contact
 
-Questions about privacy: **privacy@dailybloom.app**
+Use **Settings → Send feedback** for privacy questions or bug reports. The
+feedback share sheet includes only app version and sync diagnostics; do not
+include task content unless you choose to add it yourself.
 
 ## Changes
 

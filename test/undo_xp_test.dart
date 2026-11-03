@@ -43,15 +43,14 @@ void main() {
     expect(game.comboCount, 1);
   });
 
-  test('undo of another task falls back to the base amount', () {
+  test('undo of an unknown task does not revoke another reward', () {
     final gainA = game.registerTaskCompletion(taskId: 'a');
     game.registerTaskCompletion(taskId: 'b');
     final before = game.totalXp;
     expect(before, greaterThan(gainA));
     game.revokeTaskCompletion(taskId: 'a');
-    // Only the base grant is taken back; the combo bonus stays honest.
-    expect(game.totalXp, lessThan(before));
-    expect(game.totalXp, greaterThanOrEqualTo(0));
+    // The known task's exact reward is revoked; no other task is guessed.
+    expect(game.totalXp, before - gainA);
   });
 
   test('revoke floors at zero and walks back the daily count', () {
@@ -60,7 +59,7 @@ void main() {
     expect(game.todayCompletions, 1);
     game.revokeTaskCompletion(taskId: 'unrelated');
     game.revokeTaskCompletion(taskId: 'unrelated');
-    expect(game.totalXp, 0);
-    expect(game.todayCompletions, 0);
+    expect(game.totalXp, 50);
+    expect(game.todayCompletions, 1);
   });
 }
