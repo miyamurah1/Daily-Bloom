@@ -231,4 +231,4 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          script: flutter test integration_test -d emulator-5554
+          script: flutter test integration_test
