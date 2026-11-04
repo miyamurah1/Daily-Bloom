@@ -94,6 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           icon: LucideIcons.flower,
           title: 'Welcome to Daily Bloom',
           subtitle: 'Complete tasks. See proof. Grow.',
+          useLogo: true,
         );
       case 1:
         step = const _Slide(
@@ -276,12 +277,14 @@ class _Slide extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool showHeatmap;
+  final bool useLogo;
 
   const _Slide({
     required this.icon,
     required this.title,
     required this.subtitle,
     this.showHeatmap = false,
+    this.useLogo = false,
   });
 
   Color _heat(int i) {
@@ -332,7 +335,9 @@ class _Slide extends StatelessWidget {
                   width: 1.2,
                 ),
               ),
-              child: Icon(icon, size: 44, color: SakuraColors.primary),
+              child: useLogo
+                  ? Image.asset('assets/logo.png', width: 40, height: 40, fit: BoxFit.contain)
+                  : Icon(icon, size: 44, color: SakuraColors.primary),
             ),
           ),
           const SizedBox(height: 22),
