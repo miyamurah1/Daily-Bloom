@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import '../data/haptics.dart';
+import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
-
 /// Reusable bottom nav — Today / Rituals / Folders / Insights.
 /// Four ergonomic tabs (down from six): Rituals folds Habits + Goals,
 /// Insights folds Analytics + Review + Inbox + Rules. The same order is
@@ -59,7 +61,11 @@ class SakuraBottomNav extends StatelessWidget {
               final active = i == currentIndex;
               return Expanded(
                 child: GestureDetector(
-                  onTap: () => onTap(i),
+                  onTap: () {
+                    AppHaptics.tap();
+                    TapSound.tap();
+                    onTap(i);
+                  },
                   behavior: HitTestBehavior.opaque,
                   child: Semantics(
                     button: true,

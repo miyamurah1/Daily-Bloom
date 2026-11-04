@@ -831,7 +831,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: AuthStore.instance,
+      listenable: Listenable.merge([AuthStore.instance, ThemeStore.instance]),
       builder: (context, _) {
         final user = AuthStore.instance.user;
         return Scaffold(
