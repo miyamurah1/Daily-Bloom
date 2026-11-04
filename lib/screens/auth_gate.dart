@@ -297,9 +297,9 @@ class _AuthGateState extends State<AuthGate> {
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: SakuraColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 28,
-                              spreadRadius: 2,
+                               color: SakuraColors.primary.withValues(alpha: 0.15),
+                               blurRadius: 24,
+                               spreadRadius: 1,
                             ),
                           ],
                         ),
@@ -489,13 +489,13 @@ class _WelcomeGateState extends State<WelcomeGate>
                               SakuraColors.primary.withValues(alpha: 0.06),
                             ],
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: SakuraColors.primary.withValues(alpha: 0.25),
-                              blurRadius: 24,
-                              spreadRadius: 2,
-                            ),
-                          ],
+                           boxShadow: [
+                             BoxShadow(
+                               color: SakuraColors.primary.withValues(alpha: 0.15),
+                               blurRadius: 24,
+                               spreadRadius: 1,
+                             ),
+                           ],
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(14),
