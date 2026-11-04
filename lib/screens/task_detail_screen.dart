@@ -214,6 +214,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     await TaskRepository.instance.createSubtask(_task.id, title);
     _subCtrl.clear();
     focus.unfocus();
+    // Keep the parent task in sync so it isn't dropped from lists/views.
+    final updated = TaskRepository.instance.tasks
+        .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+    if (mounted) setState(() => _task = updated);
     await _load();
     if (mounted) setState(() => _savingSub = false);
   }
