@@ -362,9 +362,9 @@ class AuthStore extends ChangeNotifier {
           // google-services.json Android OAuth client), so the ID token has
           // no audience and Firebase rejects the credential.
           throw const AuthException(
-            'Google sign-in is not configured on this device. '
-            'Add google-services.json (with an Android OAuth client ID), '
-            'then restart and try again.',
+            'Google sign-in is not configured for this build. '
+            'Register this app’s SHA-1 in Firebase Console, add '
+            'google-services.json, then rebuild.',
           );
         }
         final credential = GoogleAuthProvider.credential(

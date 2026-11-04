@@ -3,12 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../data/guest_store.dart';
 import '../data/profile_name.dart';
 import '../data/privacy_preferences.dart';
 import '../data/background_music.dart';
@@ -315,6 +317,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Drop this account's due alarms: they reference tasks that no
     // longer belong on this device.
     await ReminderService.instance.cancelAllTaskReminders();
+    // Exit guest mode too, so a guest tapping Log out actually returns to
+    // the welcome gate instead of staying in the guest shell.
+    await TaskRepository.instance.setGuestMode(false);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('bloom_guest_mode_v1', false);
+      await prefs.remove('bloom_guest_onboarding_seen_v1');
+    } catch (_) {}
+    await GuestStore.instance.clear();
     await AuthStore.instance.logout();
     // AuthGate swaps to login; this tree is discarded.
   }

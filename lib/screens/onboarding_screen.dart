@@ -148,14 +148,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, -0.3),
-                  radius: 1.1,
-                  colors: [
-                    SakuraColors.primary.withValues(alpha: 0.12),
-                    SakuraColors.background,
-                  ],
-                ),
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.3),
+            radius: 1.1,
+            colors: [
+              SakuraColors.primary.withValues(alpha: 0.06),
+              SakuraColors.background,
+            ],
+          ),
               ),
             ),
           ),
@@ -310,15 +310,15 @@ class _Slide extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  SakuraColors.primary.withValues(alpha: 0.30),
-                  SakuraColors.primary.withValues(alpha: 0.08),
+                  SakuraColors.primary.withValues(alpha: 0.18),
+                  SakuraColors.primary.withValues(alpha: 0.04),
                 ],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: SakuraColors.primary.withValues(alpha: 0.28),
-                  blurRadius: 32,
-                  spreadRadius: 4,
+                  color: SakuraColors.primary.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  spreadRadius: 1,
                 ),
               ],
             ),

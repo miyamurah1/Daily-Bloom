@@ -210,10 +210,14 @@ class _AuthGateState extends State<AuthGate> {
         // still being restored. The guest flag must settle before routing,
         // otherwise a returning guest briefly sees the wrong entry screen.
         if (_guestMode == null) return _splash();
+        // Live source of truth: if guest mode was cleared (e.g. logout from
+        // Settings), TaskRepository.guestMode flips to false and we drop to
+        // the welcome gate instead of staying in the guest shell.
+        final isGuest = _guestMode == true && TaskRepository.instance.guestMode;
         // Already a guest: returning guests who completed onboarding go
         // straight to the shell; a newly-entered guest gets the same clear
         // first-run explanation as a signed-in user.
-        if (_guestMode == true) {
+        if (isGuest) {
           if (_onboardingSeen == null) return _splash();
           if (_guestOnboardingSeen == null) return _splash();
           if (!_guestOnboardingSeen!) {
