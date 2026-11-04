@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/background_music.dart';
 import '../data/habit_store.dart';
 import '../data/profile_name.dart';
 import '../data/reminders.dart';
@@ -45,6 +46,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _focusIndex = 0;
   bool _wantReminder = false;
   bool _simpleMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    BackgroundMusic.start();
+  }
 
   @override
   void dispose() {
