@@ -313,6 +313,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    final yes = await showBloomConfirm(
+      context,
+      title: 'Log out?',
+      message: 'You will return to the welcome screen. Your local data stays on this device.',
+      cancelLabel: 'Cancel',
+      confirmLabel: 'Log out',
+    );
+    if (!yes || !mounted) return;
     ThemeStore.instance.resetToDefault();
     // Drop this account's due alarms: they reference tasks that no
     // longer belong on this device.
