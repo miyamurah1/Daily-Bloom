@@ -153,129 +153,148 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: SakuraColors.background,
       body: Stack(
         children: [
-          Entrance(
-            delayMs: 80,
-            child: SafeArea(
-              child: Column(
-          children: [
-            ValueListenableBuilder<int>(
-              valueListenable: _pageNotifier,
-              builder: (context, page, _) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                  child: Align(
-                    alignment: Alignment.topRight,
-                    child: page < 3
-                        ? TextButton(
-                            onPressed: () => _finish(personalize: false),
-                            child: Text(
-                              'Skip',
-                              style: TextStyle(
-                                color: SakuraColors.inkFaint,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          )
-                        : const SizedBox(height: 40),
-                  ),
-                );
-              },
-            ),
-            Expanded(
-              child: ValueListenableBuilder<int>(
-                valueListenable: _pageNotifier,
-                builder: (context, page, _) {
-                  return AnimatedSwitcher(
-                    duration: AppMotion.pageTurn,
-                    // New slides come in from the right, the old one
-                    // leaves to the left. AnimatedSwitcher plays the old
-                    // child's animation in reverse, so its begin offset has
-                    // to be negative — otherwise both pages fly in from the
-                    // same edge and cross over each other.
-                    transitionBuilder: (child, animation) {
-                      final childPage = (child.key as ValueKey<int>?)?.value;
-                      final outgoing = childPage != null && childPage != page;
-                      final tween = Tween<Offset>(
-                        begin: Offset(outgoing ? -1.15 : 1.15, 0),
-                        end: Offset.zero,
-                      );
-                      return SlideTransition(
-                        position: tween.animate(
-                          CurvedAnimation(
-                              parent: animation, curve: Curves.easeOut),
-                        ),
-                        child: FadeTransition(
-                          opacity: animation,
-                          child: child,
+          const Positioned.fill(child: _OnboardingBackdrop()),
+          SafeArea(
+            child: Column(
+              children: [
+                Entrance(
+                  delayMs: 40,
+                  rise: 6,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _pageNotifier,
+                    builder: (context, page, _) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                        child: Align(
+                          alignment: Alignment.topRight,
+                          child: page < 3
+                              ? TextButton(
+                                  onPressed: () => _finish(personalize: false),
+                                  child: Text(
+                                    'Skip',
+                                    style: TextStyle(
+                                      color: SakuraColors.inkFaint,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox(height: 40),
                         ),
                       );
                     },
-                    child: _buildStep(page),
-                  );
-                },
-              ),
-            ),
-            // Dots: Wrap, not Row — at 1.3x text scale with a narrow
-            // viewport the 4 pills + margins exceed the line width and a
-            // Row throws a 60px RenderFlex overflow (web log).
-            Wrap(
-              alignment: WrapAlignment.center,
-              runSpacing: 8,
-              children: List.generate(4, (i) {
-                final active = i == _page;
-                return AnimatedContainer(
-                  duration: AppMotion.nav,
-                  curve: AppMotion.tapCurve,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: active ? 22 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? SakuraColors.primary
-                        : SakuraColors.navInactive,
-                    borderRadius: BorderRadius.circular(4),
                   ),
-                );
-              }),
-            ),
-            const SizedBox(height: 24),
-            ValueListenableBuilder<int>(
-              valueListenable: _pageNotifier,
-              builder: (context, page, _) {
-                final last = page >= 3;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Semantics(
-                      button: true,
-                      label: last ? 'Enter my garden' : 'Next',
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: SakuraColors.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                ),
+                Expanded(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _pageNotifier,
+                    builder: (context, page, _) {
+                      return AnimatedSwitcher(
+                        duration: AppMotion.pageTurn,
+                        // New slides come in from the right, the old one
+                        // leaves to the left. AnimatedSwitcher plays the old
+                        // child's animation in reverse, so its begin offset has
+                        // to be negative — otherwise both pages fly in from the
+                        // same edge and cross over each other.
+                        transitionBuilder: (child, animation) {
+                          final childPage =
+                              (child.key as ValueKey<int>?)?.value;
+                          final outgoing =
+                              childPage != null && childPage != page;
+                          final tween = Tween<Offset>(
+                            begin: Offset(outgoing ? -1.15 : 1.15, 0),
+                            end: Offset.zero,
+                          );
+                          return SlideTransition(
+                            position: tween.animate(
+                              CurvedAnimation(
+                                  parent: animation, curve: Curves.easeOut),
+                            ),
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: _buildStep(page),
+                      );
+                    },
+                  ),
+                ),
+                // Dots: Wrap, not Row — at 1.3x text scale with a narrow
+                // viewport the 4 pills + margins exceed the line width and a
+                // Row throws a 60px RenderFlex overflow (web log).
+                Entrance(
+                  delayMs: 220,
+                  rise: 10,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _pageNotifier,
+                    builder: (context, page, _) {
+                      return Wrap(
+                        alignment: WrapAlignment.center,
+                        runSpacing: 8,
+                        children: List.generate(4, (i) {
+                          final active = i == page;
+                          return AnimatedContainer(
+                            duration: AppMotion.nav,
+                            curve: AppMotion.tapCurve,
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: active ? 22 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? SakuraColors.primary
+                                  : SakuraColors.navInactive,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Entrance(
+                  delayMs: 300,
+                  rise: 14,
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _pageNotifier,
+                    builder: (context, page, _) {
+                      final last = page >= 3;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Semantics(
+                            button: true,
+                            label: last ? 'Enter my garden' : 'Next',
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: SakuraColors.primary,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: _next,
+                              child: Text(
+                                last ? 'Enter my garden' : 'Next',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            ),
                           ),
                         ),
-                        onPressed: _next,
-                        child: Text(
-                          last ? 'Enter my garden' : 'Next',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 28),
+              ],
             ),
-            const SizedBox(height: 28),
-          ],
-        ),
+          ),
+        ],
       ),
-      ),
-      ],
-    ),
     );
   }
 }
@@ -607,6 +626,110 @@ class _PersonalizeStep extends StatelessWidget {
           ),
           const SizedBox(height: 12),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Soft animated backdrop so opening onboarding feels alive (drifting blooms).
+class _OnboardingBackdrop extends StatefulWidget {
+  const _OnboardingBackdrop();
+
+  @override
+  State<_OnboardingBackdrop> createState() => _OnboardingBackdropState();
+}
+
+class _OnboardingBackdropState extends State<_OnboardingBackdrop>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _c.stop();
+      _c.value = 0.5;
+    } else if (_c.value == 0.0 && !_c.isAnimating) {
+      _c.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = Curves.easeInOut.transform(_c.value);
+          final a = 0.10 + 0.06 * t;
+          final b = 0.08 + 0.05 * (1 - t);
+          return Stack(
+            children: [
+              Positioned(
+                top: -40 + 24 * t,
+                left: -30 + 18 * (1 - t),
+                child: _GlowBlob(
+                  size: 220,
+                  color: SakuraColors.primary.withValues(alpha: a),
+                ),
+              ),
+              Positioned(
+                top: 120 - 16 * t,
+                right: -50 + 20 * t,
+                child: _GlowBlob(
+                  size: 180,
+                  color: SakuraColors.heatPeak.withValues(alpha: b),
+                ),
+              ),
+              Positioned(
+                bottom: -30 + 20 * (1 - t),
+                left: 40 + 30 * t,
+                child: _GlowBlob(
+                  size: 200,
+                  color: SakuraColors.primarySoft.withValues(alpha: a * 0.9),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _GlowBlob extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _GlowBlob({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withValues(alpha: 0)],
           ),
         ),
       ),
