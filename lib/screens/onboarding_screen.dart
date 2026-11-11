@@ -190,28 +190,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     builder: (context, page, _) {
                       return AnimatedSwitcher(
                         duration: AppMotion.pageTurn,
-                        // New slides come in from the right, the old one
-                        // leaves to the left. AnimatedSwitcher plays the old
-                        // child's animation in reverse, so its begin offset has
-                        // to be negative — otherwise both pages fly in from the
-                        // same edge and cross over each other.
+                        switchInCurve: AppMotion.pageTurnCurve,
+                        switchOutCurve: Curves.easeInCubic,
+                        layoutBuilder: (currentChild, previousChildren) {
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: <Widget>[
+                              ...previousChildren,
+                              if (currentChild != null) currentChild,
+                            ],
+                          );
+                        },
                         transitionBuilder: (child, animation) {
                           final childPage =
                               (child.key as ValueKey<int>?)?.value;
                           final outgoing =
                               childPage != null && childPage != page;
-                          final tween = Tween<Offset>(
-                            begin: Offset(outgoing ? -1.15 : 1.15, 0),
-                            end: Offset.zero,
+                          final curved = CurvedAnimation(
+                            parent: animation,
+                            curve: AppMotion.pageTurnCurve,
+                            reverseCurve: Curves.easeInCubic,
                           );
-                          return SlideTransition(
-                            position: tween.animate(
-                              CurvedAnimation(
-                                  parent: animation, curve: Curves.easeOut),
-                            ),
-                            child: FadeTransition(
-                              opacity: animation,
-                              child: child,
+                          final slide = Tween<Offset>(
+                            begin: Offset(outgoing ? -0.22 : 0.22, 0),
+                            end: Offset.zero,
+                          ).animate(curved);
+                          final scale = Tween<double>(
+                            begin: outgoing ? 1.0 : 0.94,
+                            end: outgoing ? 0.94 : 1.0,
+                          ).animate(curved);
+                          return FadeTransition(
+                            opacity: curved,
+                            child: SlideTransition(
+                              position: slide,
+                              child: ScaleTransition(
+                                scale: scale,
+                                child: child,
+                              ),
                             ),
                           );
                         },
@@ -235,16 +250,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         children: List.generate(4, (i) {
                           final active = i == page;
                           return AnimatedContainer(
-                            duration: AppMotion.nav,
-                            curve: AppMotion.tapCurve,
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOutCubic,
                             margin: const EdgeInsets.symmetric(horizontal: 4),
-                            width: active ? 22 : 8,
+                            width: active ? 24 : 8,
                             height: 8,
                             decoration: BoxDecoration(
                               color: active
                                   ? SakuraColors.primary
                                   : SakuraColors.navInactive,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(99),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: SakuraColors.primary.withValues(
+                                      alpha: active ? 0.22 : 0.0),
+                                  blurRadius: active ? 10 : 0,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
                           );
                         }),
@@ -272,15 +295,32 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 backgroundColor: SakuraColors.primary,
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 15),
+                                elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                               onPressed: _next,
-                              child: Text(
-                                last ? 'Enter my garden' : 'Next',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w800),
+                              child: AnimatedSwitcher(
+                                duration: AppMotion.toggle,
+                                switchInCurve: Curves.easeOutBack,
+                                switchOutCurve: Curves.easeIn,
+                                transitionBuilder: (c, a) => FadeTransition(
+                                  opacity: a,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: const Offset(0, 0.35),
+                                      end: Offset.zero,
+                                    ).animate(a),
+                                    child: c,
+                                  ),
+                                ),
+                                child: Text(
+                                  last ? 'Enter my garden' : 'Next',
+                                  key: ValueKey<bool>(last),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800),
+                                ),
                               ),
                             ),
                           ),
@@ -299,7 +339,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _Slide extends StatelessWidget {
+class _Slide extends StatefulWidget {
   final IconData icon;
   final String title;
   final String subtitle;
@@ -314,6 +354,17 @@ class _Slide extends StatelessWidget {
     this.useLogo = false,
   });
 
+  @override
+  State<_Slide> createState() => _SlideState();
+}
+
+class _SlideState extends State<_Slide> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+  late final Animation<double> _heroScale;
+  late final Animation<double> _heroLift;
+  late final Animation<double> _heroFade;
+  late final Animation<double> _glow;
+
   Color _heat(int i) {
     switch (i) {
       case 1:
@@ -325,6 +376,73 @@ class _Slide extends StatelessWidget {
       default:
         return SakuraColors.heat4;
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _heroScale = Tween<double>(begin: 0.82, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _c,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOutBack),
+      ),
+    );
+    _heroLift = Tween<double>(begin: 18, end: 0).animate(
+      CurvedAnimation(
+        parent: _c,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOutCubic),
+      ),
+    );
+    _heroFade = CurvedAnimation(
+      parent: _c,
+      curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
+    );
+    _glow = CurvedAnimation(
+      parent: _c,
+      curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+    );
+    _c.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (AppMotion.reduced(context)) {
+      _c.value = 1.0;
+      _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Widget _animatedIn({
+    required double start,
+    required double end,
+    required Widget child,
+    double dy = 14,
+  }) {
+    final anim = CurvedAnimation(
+      parent: _c,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) => Opacity(
+        opacity: anim.value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - anim.value) * dy),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override
@@ -347,73 +465,184 @@ class _Slide extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: SakuraColors.surface,
-              border: Border.all(
-                color: SakuraColors.primary.withValues(alpha: 0.16),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: SakuraColors.ink.withValues(alpha: 0.06),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Center(
-              child: useLogo
-                  ? const BloomMark(size: 48)
-                  : Icon(icon, size: 38, color: SakuraColors.primary),
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (showHeatmap) ...[
-            Semantics(
-              label: 'Contribution heatmap preview',
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                alignment: WrapAlignment.center,
-                children: [
-                  for (var i = 0; i < 35; i++)
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: _heat(i % 5),
-                        borderRadius: BorderRadius.circular(4),
+                  AnimatedBuilder(
+                    animation: _c,
+                    builder: (context, _) {
+                      return Opacity(
+                        opacity: _heroFade.value,
+                        child: Transform.translate(
+                          offset: Offset(0, _heroLift.value),
+                          child: Transform.scale(
+                            scale: _heroScale.value,
+                            child: Container(
+                              width: 96,
+                              height: 96,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: SakuraColors.surface,
+                                border: Border.all(
+                                  color: SakuraColors.primary
+                                      .withValues(alpha: 0.12 + 0.10 * _glow.value),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: SakuraColors.primary.withValues(
+                                        alpha: 0.06 + 0.14 * _glow.value),
+                                    blurRadius: 18 + 16 * _glow.value,
+                                    spreadRadius: 1 + 2 * _glow.value,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                  BoxShadow(
+                                    color: SakuraColors.ink
+                                        .withValues(alpha: 0.05),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: widget.useLogo
+                                    ? TweenAnimationBuilder<double>(
+                                        tween: Tween(begin: 0.0, end: 1.0),
+                                        duration:
+                                            const Duration(milliseconds: 700),
+                                        curve: Curves.easeOutBack,
+                                        builder: (context, v, child) =>
+                                            Transform.scale(
+                                          scale: 0.85 + 0.15 * v,
+                                          child: Opacity(
+                                            opacity: v.clamp(0.0, 1.0),
+                                            child: child,
+                                          ),
+                                        ),
+                                        child: const BloomMark(size: 52),
+                                      )
+                                    : TweenAnimationBuilder<double>(
+                                        tween: Tween(begin: 0.0, end: 1.0),
+                                        duration:
+                                            const Duration(milliseconds: 700),
+                                        curve: Curves.easeOutBack,
+                                        builder: (context, v, child) =>
+                                            Transform.scale(
+                                          scale: 0.85 + 0.15 * v,
+                                          child: Transform.rotate(
+                                            angle: (1 - v) * -0.12,
+                                            child: Opacity(
+                                              opacity: v.clamp(0.0, 1.0),
+                                              child: child,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Icon(widget.icon,
+                                            size: 40,
+                                            color: SakuraColors.primary),
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  if (widget.showHeatmap) ...[
+                    _animatedIn(
+                      start: 0.22,
+                      end: 0.78,
+                      dy: 10,
+                      child: Semantics(
+                        label: 'Contribution heatmap preview',
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            for (var i = 0; i < 35; i++)
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: Duration(
+                                    milliseconds:
+                                        420 + (i % 7) * 28 + (i ~/ 7) * 18),
+                                curve: Curves.easeOutBack,
+                                builder: (context, v, child) => Opacity(
+                                  opacity: v.clamp(0.0, 1.0),
+                                  child: Transform.scale(
+                                    scale: 0.6 + 0.4 * v,
+                                    child: child,
+                                  ),
+                                ),
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: _heat(i % 5),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 23,
-              height: 1.3,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: SakuraColors.ink,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.5,
-              color: SakuraColors.inkSoft,
-            ),
-          ),
+                    const SizedBox(height: 24),
+                  ],
+                  _animatedIn(
+                    start: widget.showHeatmap ? 0.38 : 0.28,
+                    end: 0.82,
+                    dy: 12,
+                    child: TweenAnimationBuilder<double>(
+                      key: ValueKey<String>('title-${widget.title}'),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 650),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, child) => Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset(0, (1 - v) * 8),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        widget.title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 23,
+                          height: 1.3,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          color: SakuraColors.ink,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _animatedIn(
+                    start: widget.showHeatmap ? 0.46 : 0.38,
+                    end: 0.92,
+                    dy: 10,
+                    child: TweenAnimationBuilder<double>(
+                      key: ValueKey<String>('subtitle-${widget.subtitle}'),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 750),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, child) => Opacity(
+                        opacity: v,
+                        child: Transform.translate(
+                          offset: Offset(0, (1 - v) * 6),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        widget.subtitle,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: SakuraColors.inkSoft,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -549,82 +778,118 @@ class _PersonalizeStep extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-          const SizedBox(height: 8),
-          Text(
-            'Make it yours',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 22,
-              height: 1.25,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: SakuraColors.ink,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'All optional — you can change these later in Settings.',
-            textAlign: TextAlign.center,
-            style:
-                TextStyle(fontSize: 13, height: 1.4, color: SakuraColors.inkSoft),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            onChanged: onName,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'What should we call you?',
-              hintText: 'Your name',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            onChanged: onFirstTask,
-            textCapitalization: TextCapitalization.sentences,
-            textInputAction: TextInputAction.done,
-            decoration: const InputDecoration(
-              labelText: 'What is the single most important thing today?',
-              hintText: 'e.g. Meditate 10 mins',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'What are you tending?',
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: SakuraColors.ink),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'We\'ll plant a tiny starter ritual to match.',
-            style: TextStyle(fontSize: 11.5, color: SakuraColors.inkSoft),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            children: [for (var i = 0; i < labels.length; i++) _chip(context, i)],
-          ),
-          const SizedBox(height: 10),
-          _switchRow(
-            icon: LucideIcons.bell,
-            title: 'Daily nudge',
-            subtitle: 'A gentle reminder at 9:00 — you pick the hour later.',
-            value: reminderOn,
-            onChanged: onReminder,
-          ),
-          _switchRow(
-            icon: LucideIcons.moon,
-            title: 'Simple mode',
-            subtitle: 'A calmer home — power tools stay hidden until wanted.',
-            value: simpleOn,
-            onChanged: onSimple,
-          ),
-          const SizedBox(height: 12),
+              Entrance(
+                delayMs: 20,
+                rise: 10,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      'Make it yours',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 22,
+                        height: 1.25,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        color: SakuraColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'All optional \u2014 you can change these later in Settings.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 13, height: 1.4, color: SakuraColors.inkSoft),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Entrance(
+                delayMs: 80,
+                rise: 10,
+                child: TextField(
+                  onChanged: onName,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'What should we call you?',
+                    hintText: 'Your name',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Entrance(
+                delayMs: 120,
+                rise: 10,
+                child: TextField(
+                  onChanged: onFirstTask,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: 'What is the single most important thing today?',
+                    hintText: 'e.g. Meditate 10 mins',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Entrance(
+                delayMs: 160,
+                rise: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'What are you tending?',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: SakuraColors.ink),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "We'll plant a tiny starter ritual to match.",
+                      style:
+                          TextStyle(fontSize: 11.5, color: SakuraColors.inkSoft),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      children: [
+                        for (var i = 0; i < labels.length; i++) _chip(context, i)
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              Entrance(
+                delayMs: 220,
+                rise: 8,
+                child: _switchRow(
+                  icon: LucideIcons.bell,
+                  title: 'Daily nudge',
+                  subtitle: 'A gentle reminder at 9:00 \u2014 you pick the hour later.',
+                  value: reminderOn,
+                  onChanged: onReminder,
+                ),
+              ),
+              Entrance(
+                delayMs: 260,
+                rise: 8,
+                child: _switchRow(
+                  icon: LucideIcons.moon,
+                  title: 'Simple mode',
+                  subtitle: 'A calmer home \u2014 power tools stay hidden until wanted.',
+                  value: simpleOn,
+                  onChanged: onSimple,
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -651,7 +916,7 @@ class _OnboardingBackdropState extends State<_OnboardingBackdrop>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 8),
+      duration: const Duration(milliseconds: 4200),
     )..forward();
   }
 
@@ -660,7 +925,7 @@ class _OnboardingBackdropState extends State<_OnboardingBackdrop>
     super.didChangeDependencies();
     if (AppMotion.reduced(context)) {
       _c.stop();
-      _c.value = 0.5;
+      _c.value = 1.0;
     } else if (_c.value == 0.0 && !_c.isAnimating) {
       _c.forward();
     }
@@ -678,33 +943,42 @@ class _OnboardingBackdropState extends State<_OnboardingBackdrop>
       child: AnimatedBuilder(
         animation: _c,
         builder: (context, _) {
-          final t = Curves.easeInOut.transform(_c.value);
-          final a = 0.10 + 0.06 * t;
-          final b = 0.08 + 0.05 * (1 - t);
+          final t = Curves.easeInOutCubic.transform(_c.value);
+          final breathe = (0.5 - (t - 0.5).abs()) * 2;
+          final a = 0.07 + 0.08 * t;
+          final b = 0.06 + 0.07 * breathe.clamp(0.0, 1.0);
           return Stack(
             children: [
               Positioned(
-                top: -40 + 24 * t,
-                left: -30 + 18 * (1 - t),
+                top: -60 + 40 * t,
+                left: -40 + 28 * (1 - t),
                 child: _GlowBlob(
-                  size: 220,
+                  size: 240,
                   color: SakuraColors.primary.withValues(alpha: a),
                 ),
               ),
               Positioned(
-                top: 120 - 16 * t,
-                right: -50 + 20 * t,
+                top: 80 + 40 * (1 - t),
+                right: -60 + 26 * t,
                 child: _GlowBlob(
-                  size: 180,
+                  size: 210,
                   color: SakuraColors.heatPeak.withValues(alpha: b),
                 ),
               ),
               Positioned(
-                bottom: -30 + 20 * (1 - t),
-                left: 40 + 30 * t,
+                bottom: 120 - 30 * t,
+                left: -20 + 50 * t,
                 child: _GlowBlob(
-                  size: 200,
-                  color: SakuraColors.primarySoft.withValues(alpha: a * 0.9),
+                  size: 170,
+                  color: SakuraColors.primarySoft.withValues(alpha: 0.05 + 0.06 * t),
+                ),
+              ),
+              Positioned(
+                bottom: -50 + 34 * (1 - t),
+                right: 10 + 24 * t,
+                child: _GlowBlob(
+                  size: 220,
+                  color: SakuraColors.primary.withValues(alpha: 0.04 + 0.05 * (1 - t)),
                 ),
               ),
             ],
