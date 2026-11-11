@@ -127,11 +127,29 @@ class _InsightsHubScreenState extends State<InsightsHubScreen> {
             ),
           ),
           Expanded(
-            child: IndexedStack(
-              index: _index,
-              children: [
-                for (var i = 0; i < _labels.length; i++) _pageAt(i),
-              ],
+            // Fade + lift when the section changes. The IndexedStack keeps
+            // every visited section alive, so this animates the switch
+            // without refetching or losing scroll state.
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey<int>(_index),
+              tween: Tween(begin: 0, end: 1),
+              duration: AppMotion.reduced(context)
+                  ? Duration.zero
+                  : AppMotion.pageTurn,
+              curve: AppMotion.pageTurnCurve,
+              builder: (context, t, child) => Opacity(
+                opacity: t,
+                child: Transform.translate(
+                  offset: Offset(0, 10 * (1 - t)),
+                  child: child,
+                ),
+              ),
+              child: IndexedStack(
+                index: _index,
+                children: [
+                  for (var i = 0; i < _labels.length; i++) _pageAt(i),
+                ],
+              ),
             ),
           ),
         ],

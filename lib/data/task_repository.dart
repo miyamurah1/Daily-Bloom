@@ -122,11 +122,34 @@ class TaskRepository extends ChangeNotifier {
       final title = (g['title'] as String? ?? '').trim();
       if (title.isEmpty) continue;
       final guestId = g['id'] as String?;
+      DateTime? dueAt;
+      final rawDue = g['dueAt'] ?? g['due_at'];
+      if (rawDue is String && rawDue.isNotEmpty) {
+        dueAt = DateTime.tryParse(rawDue);
+      }
       try {
         final created = await createTask(
           title: title,
           folder: (g['folder'] as String?) ?? 'Productivity',
+          tag: (g['tag'] as String?) ?? 'General',
+          description: (g['description'] as String?) ?? '',
+          priority: (g['priority'] as String?) ?? 'none',
+          recurring: (g['recurring'] as String?) ?? 'none',
+          dueAt: dueAt,
         );
+        final subs = g['subtasks'];
+        if (subs is List) {
+          for (final raw in subs) {
+            if (raw is! Map) continue;
+            final st = raw['title'] as String?;
+            if (st == null || st.trim().isEmpty) continue;
+            final createdSub =
+                await createSubtask(created.id, st.trim());
+            if (raw['done'] == true) {
+              await setSubtaskDone(createdSub.id, true);
+            }
+          }
+        }
         if (g['done'] == true) {
           await moveTask(created.id, 'done', awardProgress: false);
         }
@@ -493,7 +516,13 @@ class TaskRepository extends ChangeNotifier {
         );
         idMap[clientId] = created.id;
         final idx = _tasks.indexWhere((t) => t.id == clientId);
-        if (idx != -1) _tasks[idx] = created;
+        if (idx != -1) {
+          final local = _tasks[idx];
+          final merged = (created.subtasks == null || created.subtasks!.isEmpty)
+              ? created.copyWith(subtasks: local.subtasks)
+              : created;
+          _tasks[idx] = merged;
+        }
         break;
       case 'move':
         await _api.moveTask(resolve('${m['id']}'), '${m['status']}');
@@ -519,7 +548,7 @@ class TaskRepository extends ChangeNotifier {
         await _api.deleteTask(resolve('${m['id']}'));
         break;
       case 'subtask':
-        await _api.updateSubtask('${m['id']}', done: m['done'] == true);
+        await _api.updateSubtask(resolveSub('${m['id']}'), done: m['done'] == true);
         break;
       case 'reorder':
         final updates = (m['updates'] as List)
@@ -607,6 +636,8 @@ class TaskRepository extends ChangeNotifier {
                 'recurring': t.recurring,
                 'position': t.position,
                 'status': t.status,
+                'created_at': t.createdAt?.toIso8601String(),
+                'completed_at': t.completedAt?.toIso8601String(),
                 'due_at': t.dueAt?.toIso8601String(),
                 'avatar_label': t.avatarLabel,
                 'comments': t.comments,
@@ -688,9 +719,18 @@ class TaskRepository extends ChangeNotifier {
     final merged = <Task>[];
     for (final task in remote) {
       if (deleted.contains(task.id)) continue;
-      merged.add(pending.contains(task.id) && localById[task.id] != null
-          ? localById[task.id]!
-          : task);
+      final local = localById[task.id];
+      if (pending.contains(task.id) && local != null) {
+        merged.add(local);
+        continue;
+      }
+      // Preserve locally-known subtasks when the server omits them.
+      final resolved = (local != null &&
+              (task.subtasks == null || task.subtasks!.isEmpty) &&
+              (local.subtasks != null && local.subtasks!.isNotEmpty))
+          ? task.copyWith(subtasks: local.subtasks)
+          : task;
+      merged.add(resolved);
     }
     // Keep offline-created rows visible until their create mutation lands.
     for (final task in _tasks) {
@@ -754,7 +794,11 @@ class TaskRepository extends ChangeNotifier {
       );
       final idx = _tasks.indexWhere((t) => t.id == tempId);
       if (idx != -1) {
-        _tasks[idx] = serverTask;
+        final local = _tasks[idx];
+        final merged = (serverTask.subtasks == null || serverTask.subtasks!.isEmpty)
+            ? serverTask.copyWith(subtasks: local.subtasks)
+            : serverTask;
+        _tasks[idx] = merged;
       }
       notifyListeners();
       await _saveToLocalCache();
@@ -791,7 +835,11 @@ class TaskRepository extends ChangeNotifier {
     if (idx != -1) {
       final old = _tasks[idx];
       if (old.status == newStatus) return;
-      _tasks[idx] = old.copyWith(status: newStatus);
+      _tasks[idx] = old.copyWith(
+        status: newStatus,
+        completedAt: newStatus == 'done' ? DateTime.now() : null,
+        clearCompleted: newStatus != 'done',
+      );
       notifyListeners();
       await _saveToLocalCache();
       if (awardProgress && newStatus == 'done' && !wasDone) {
@@ -807,13 +855,18 @@ class TaskRepository extends ChangeNotifier {
     // Guest mode: persist locally, never sync.
     if (_guestMode) return;
 
-    try {
-      final updated = await _api.moveTask(id, newStatus);
-      final currIdx = _tasks.indexWhere((t) => t.id == id);
-      if (currIdx != -1) {
-        _tasks[currIdx] = updated;
-        notifyListeners();
-      }
+     try {
+       final updated = await _api.moveTask(id, newStatus);
+       final currIdx = _tasks.indexWhere((t) => t.id == id);
+       if (currIdx != -1) {
+         // Preserve locally-known subtasks if the server response omits them.
+         final local = _tasks[currIdx];
+         final merged = (updated.subtasks == null || updated.subtasks!.isEmpty)
+             ? updated.copyWith(subtasks: local.subtasks)
+             : updated;
+         _tasks[currIdx] = merged;
+         notifyListeners();
+       }
       _syncState = TaskSyncState.synced;
     } catch (_) {
       // Offline: keep the optimistic status and queue the move.
@@ -848,6 +901,10 @@ class TaskRepository extends ChangeNotifier {
         recurring: recurring,
         dueAt: clearDue ? null : (dueAt ?? old.dueAt),
         clearDue: clearDue,
+        completedAt: status == 'done'
+            ? DateTime.now()
+            : (status != null ? null : old.completedAt),
+        clearCompleted: status != null && status != 'done',
       );
       _tasks[idx] = optimistic;
       notifyListeners();
@@ -870,11 +927,15 @@ class TaskRepository extends ChangeNotifier {
         dueAt: dueAt,
         clearDue: clearDue,
       );
-      final currIdx = _tasks.indexWhere((t) => t.id == id);
-      if (currIdx != -1) {
-        _tasks[currIdx] = updated;
-        notifyListeners();
-      }
+       final currIdx = _tasks.indexWhere((t) => t.id == id);
+       if (currIdx != -1) {
+         final local = _tasks[currIdx];
+         final merged = (updated.subtasks == null || updated.subtasks!.isEmpty)
+             ? updated.copyWith(subtasks: local.subtasks)
+             : updated;
+         _tasks[currIdx] = merged;
+         notifyListeners();
+       }
     } catch (_) {
       // Offline: keep the optimistic edit and queue it.
       await _enqueue({
@@ -961,6 +1022,7 @@ class TaskRepository extends ChangeNotifier {
       updated[si] = subs[si].copyWith(
         done: done,
         completedAt: done ? DateTime.now() : null,
+        clearCompleted: !done,
       );
       _tasks[i] = _tasks[i].copyWith(subtasks: updated);
       notifyListeners();
@@ -1013,6 +1075,8 @@ class TaskRepository extends ChangeNotifier {
   Future<void> deleteSubtask(String subtaskId) async {
     _removeSubtaskEverywhere(subtaskId);
     await _saveToLocalCache();
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
     try {
       await _api.deleteSubtask(subtaskId);
     } catch (_) {
@@ -1041,6 +1105,8 @@ class TaskRepository extends ChangeNotifier {
         await _saveToLocalCache();
       }
     }
+    // Guest mode: persist locally, never sync.
+    if (_guestMode) return;
     try {
       for (var i = 0; i < orderedIds.length; i++) {
         await _api.updateSubtask(orderedIds[i], position: i);
@@ -1141,9 +1207,19 @@ class TaskRepository extends ChangeNotifier {
     final idx = _tasks.indexWhere((t) => t.id == taskId);
     if (idx == -1) return;
     final subs = _tasks[idx].subtasks;
-    if (subs == null) return;
+    if (subs == null) {
+      _tasks[idx] = _tasks[idx].copyWith(subtasks: [s]);
+      notifyListeners();
+      if (save) _saveToLocalCache();
+      return;
+    }
     final si = subs.indexWhere((x) => x.id == tempId);
-    if (si == -1) return;
+    if (si == -1) {
+      _tasks[idx] = _tasks[idx].copyWith(subtasks: [...subs, s]);
+      notifyListeners();
+      if (save) _saveToLocalCache();
+      return;
+    }
     final updated = [...subs];
     updated[si] = s;
     _tasks[idx] = _tasks[idx].copyWith(subtasks: updated);

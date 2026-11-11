@@ -226,7 +226,18 @@ class AuthStore extends ChangeNotifier {
                         'id': t.id,
                         'title': t.title,
                         'folder': t.folder,
+                        'tag': t.tag,
+                        'description': t.description,
+                        'priority': t.priority,
+                        'recurring': t.recurring,
+                        'dueAt': t.dueAt?.toIso8601String(),
                         'done': t.status == 'done',
+                        'subtasks': t.subtasks
+                            ?.map((s) => {
+                                  'title': s.title,
+                                  'done': s.done,
+                                })
+                            .toList(),
                       })
                   .toList(),
             );

@@ -735,7 +735,8 @@ class Subtask {
           {String? title,
           bool? done,
           int? position,
-          DateTime? completedAt}) =>
+          DateTime? completedAt,
+          bool clearCompleted = false}) =>
       Subtask(
         id: id,
         taskId: taskId,
@@ -743,7 +744,7 @@ class Subtask {
         done: done ?? this.done,
         position: position ?? this.position,
         startedAt: startedAt,
-        completedAt: completedAt ?? this.completedAt,
+        completedAt: clearCompleted ? null : (completedAt ?? this.completedAt),
       );
 }
 

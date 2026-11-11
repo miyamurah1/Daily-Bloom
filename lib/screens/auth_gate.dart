@@ -3,14 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/auth_store.dart';
-import '../data/background_music.dart';
 import '../data/guest_store.dart';
 import '../data/haptics.dart';
-import '../data/tap_sound.dart';
 import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
-import '../game/dynamic_bloom_background.dart';
+import '../widgets/bloom_mark.dart';
+import '../widgets/google_button.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
 import 'app_shell.dart';
@@ -51,15 +50,39 @@ class _AuthGateState extends State<AuthGate> {
   String? _seenFirebaseUid;
   bool _onboardingRefreshPending = false;
 
+  /// Last guest flag observed on the repository. Leaving guest mode clears
+  /// the repo flag but fires no Firebase auth event, so without this the
+  /// gate never re-evaluates and the user stays inside the guest shell.
+  bool _lastRepoGuestMode = false;
+
   @override
   void initState() {
     super.initState();
     AuthStore.instance.restore();
     _loadOnboarding();
     _loadGuestMode();
+    _lastRepoGuestMode = TaskRepository.instance.guestMode;
+    TaskRepository.instance.addListener(_onRepoGuestModeChanged);
     Future.delayed(const Duration(milliseconds: 450), () {
       if (mounted) setState(() => _minSplashDone = true);
     });
+  }
+
+  @override
+  void dispose() {
+    TaskRepository.instance.removeListener(_onRepoGuestModeChanged);
+    super.dispose();
+  }
+
+  /// Guest mode ended (Settings → leave guest mode): drop back to the
+  /// welcome gate immediately. Entering guest is handled by [_enterGuest],
+  /// which already sets its own state.
+  void _onRepoGuestModeChanged() {
+    final guest = TaskRepository.instance.guestMode;
+    if (guest == _lastRepoGuestMode) return;
+    _lastRepoGuestMode = guest;
+    if (guest || !mounted) return;
+    if (_guestMode == true) setState(() => _guestMode = false);
   }
 
   Future<void> _loadOnboarding() async {
@@ -122,17 +145,24 @@ class _AuthGateState extends State<AuthGate> {
     // Set this before awaiting SharedPreferences so a concurrent first-run
     // read cannot win a race and skip the guest onboarding.
     _guestOnboardingRequired = true;
+    // A returning guest keeps their tasks and does not replay the intro;
+    // a brand-new guest still gets the first-run slides.
+    var alreadyOnboarded = false;
     try {
       final prefs = await SharedPreferences.getInstance();
+      alreadyOnboarded = prefs.getBool(_guestOnboardingKey) ?? false;
       await prefs.setBool('bloom_guest_mode_v1', true);
-      await prefs.setBool(_guestOnboardingKey, false);
+      await prefs.setBool(_guestOnboardingKey, alreadyOnboarded);
     } catch (_) {}
     await TaskRepository.instance.setGuestMode(true);
+    // Restore anything left in the guest store (e.g. after leaving guest
+    // mode from Settings without deleting their work).
+    await GuestStore.instance.load();
     if (!mounted) return;
     setState(() {
       _guestMode = true;
-      _guestOnboardingSeen = false;
-      _onboardingSeen = false;
+      _guestOnboardingSeen = alreadyOnboarded;
+      _onboardingSeen = true;
     });
   }
 
@@ -282,34 +312,28 @@ class _AuthGateState extends State<AuthGate> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Brand logo — a glowing bloom in a soft gradient ring.
+                    // Brand logo — a bloom on a clean surface circle.
                     _PulseLogo(
                       child: Container(
-                        width: 96,
-                        height: 96,
+                        width: 100,
+                        height: 100,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              SakuraColors.primary.withValues(alpha: 0.30),
-                              SakuraColors.primary.withValues(alpha: 0.06),
-                            ],
+                          color: SakuraColors.surface,
+                          border: Border.all(
+                            color:
+                                SakuraColors.primary.withValues(alpha: 0.16),
                           ),
                           boxShadow: [
                             BoxShadow(
-                               color: SakuraColors.primary.withValues(alpha: 0.15),
-                               blurRadius: 24,
-                               spreadRadius: 1,
+                              color:
+                                  SakuraColors.ink.withValues(alpha: 0.06),
+                              blurRadius: 20,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Image.asset(
-                            'assets/logo.png',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
+                        child: const Center(child: BloomMark(size: 58)),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -377,13 +401,9 @@ class _WelcomeGateState extends State<WelcomeGate>
       vsync: this,
       duration: const Duration(seconds: 8),
     )..repeat();
-    // A single welcome tick as the cascade begins — keeps the haptic
-    // language in sync with the entrance animation.
-    AppHaptics.select();
-    // Soft welcome blip + resume the opt-in background loop; both are
-    // guarded and no-op when disabled/headless.
-    TapSound.tap();
-    BackgroundMusic.start();
+    // Only the opt-in background loop resumes here. No tap sound or haptic
+    // on mount: browsers block both until the first real gesture, so firing
+    // them here only produced console interventions on web.
   }
 
   @override
@@ -429,9 +449,20 @@ class _WelcomeGateState extends State<WelcomeGate>
   @override
   Widget build(BuildContext context) {
     final onSignIn = widget.onSignIn;
-    return DynamicBloomBackground(
-      streak: 0,
-      child: Scaffold(
+    // One primary action per screen: creating an account when the caller
+    // offers it, otherwise signing in. Guest and Google are deliberately
+    // quieter so a first-time phone user has a single obvious path.
+    final busy = _guestBusy || _googleBusy;
+    final createAccount = widget.onCreateAccount;
+    final primaryLabel =
+        createAccount != null ? 'Create a free account' : 'Sign In';
+    final primaryIcon = createAccount != null
+        ? Icons.person_add_alt_1_outlined
+        : Icons.login;
+    // One decorative layer only: PetalRain paints behind the content. The
+    // previous DynamicBloomBackground wrapper added a second 14s loop whose
+    // motes painted *over* the copy and buttons.
+    return Scaffold(
         backgroundColor: SakuraColors.background,
         body: Stack(
           children: [
@@ -466,115 +497,91 @@ class _WelcomeGateState extends State<WelcomeGate>
             ),
             PetalRain(
               child: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                const SizedBox(height: 24),
-                Entrance(
-                  delayMs: 80,
-                  child: Semantics(
-                    label: 'Daily Bloom logo',
-                    image: true,
-                    child: _PulseLogo(
-                      child: Container(
-                        width: 88,
-                        height: 88,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              SakuraColors.primary.withValues(alpha: 0.30),
-                              SakuraColors.primary.withValues(alpha: 0.06),
-                            ],
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Entrance(
+                            delayMs: 80,
+                            child: Semantics(
+                              label: 'Daily Bloom logo',
+                              image: true,
+                              child: _PulseLogo(
+                                child: Container(
+                                  width: 74,
+                                  height: 74,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: SakuraColors.surface,
+                                    border: Border.all(
+                                      color: SakuraColors.primary
+                                          .withValues(alpha: 0.16),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: SakuraColors.ink
+                                            .withValues(alpha: 0.06),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: BloomMark(size: 44),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                           boxShadow: [
-                             BoxShadow(
-                               color: SakuraColors.primary.withValues(alpha: 0.15),
-                               blurRadius: 24,
-                               spreadRadius: 1,
-                             ),
-                           ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Image.asset(
-                            'assets/logo.png',
-                            fit: BoxFit.contain,
+                          const SizedBox(height: 12),
+                          Entrance(
+                            delayMs: 160,
+                            child: Text(
+                              'Daily Bloom',
+                              style: TextStyle(
+                                fontSize: 25,
+                                fontWeight: FontWeight.w800,
+                                color: SakuraColors.ink,
+                                letterSpacing: -0.6,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Entrance(
-                  delayMs: 160,
-                  child: Text(
-                    'Daily Bloom',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: SakuraColors.ink,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Entrance(
-                  delayMs: 220,
-                  child: Text(
-                    'One task. One timer. One focus.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: SakuraColors.inkSoft,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                const Entrance(
-                  delayMs: 280,
-                  child: _ValueBullets(),
-                ),
-                const SizedBox(height: 16),
-                Entrance(
-                  delayMs: 320,
-                  child: Text(
-                    'Start as a guest — up to 3 tasks, no account needed. '
-                    'Create a free account anytime to sync across devices.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      height: 1.5,
-                      color: SakuraColors.inkFaint,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Entrance(
-                  delayMs: 360,
+                          const SizedBox(height: 4),
+                          Entrance(
+                            delayMs: 220,
+                            child: Text(
+                              'One task. One timer. One focus.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                color: SakuraColors.inkSoft,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          const Entrance(
+                            delayMs: 280,
+                            child: _ValueBullets(),
+                          ),
+                          const SizedBox(height: 14),
+                          Entrance(
+                            delayMs: 360,
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: EdgeInsets.zero,
                       child: Pressable(
                         child: FilledButton.icon(
-                          onPressed: (_guestBusy || _googleBusy) ? null : _enterGuest,
-                          icon: _guestBusy
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.person_outline, size: 18),
+                          onPressed:
+                              busy ? null : (createAccount ?? onSignIn),
+                          icon: Icon(primaryIcon, size: 18),
                           label: Text(
-                            _guestBusy ? 'Starting…' : 'Continue as Guest',
+                            primaryLabel,
                             style: const TextStyle(
                                 fontWeight: FontWeight.w700, fontSize: 15),
                           ),
@@ -582,7 +589,7 @@ class _WelcomeGateState extends State<WelcomeGate>
                             backgroundColor: SakuraColors.primary,
                             foregroundColor: Colors.white,
                             padding:
-                                const EdgeInsets.symmetric(vertical: 16),
+                                const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -592,13 +599,13 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Entrance(
                   delayMs: 420,
                   child: SizedBox(
                     width: double.infinity,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: EdgeInsets.zero,
                       child: Pressable(
                         child: OutlinedButton.icon(
                           onPressed: (_guestBusy || _googleBusy)
@@ -612,14 +619,7 @@ class _WelcomeGateState extends State<WelcomeGate>
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text(
-                                  'G',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF4285F4),
-                                  ),
-                                ),
+                              : const GoogleLogo(),
                           label: Text(
                             _googleBusy ? 'Signing in…' : 'Continue with Google',
                             style: const TextStyle(
@@ -628,7 +628,7 @@ class _WelcomeGateState extends State<WelcomeGate>
                           style: OutlinedButton.styleFrom(
                             foregroundColor: SakuraColors.ink,
                             padding:
-                                const EdgeInsets.symmetric(vertical: 16),
+                                const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -640,54 +640,51 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Entrance(
-                  delayMs: 480,
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Pressable(
-                        child: OutlinedButton.icon(
-                          onPressed: (_guestBusy || _googleBusy)
-                              ? null
-                              : onSignIn,
-                          icon: const Icon(Icons.login, size: 18),
-                          label: const Text(
-                            'Sign In',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 15),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: SakuraColors.primary,
-                            padding:
-                                const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            side: BorderSide(color: SakuraColors.primary),
-                          ),
+                // Only when creating an account is the primary action;
+                // otherwise the primary button already says "Sign In".
+                if (createAccount != null) ...[
+                  const SizedBox(height: 2),
+                  Entrance(
+                    delayMs: 480,
+                    child: TextButton(
+                      onPressed: busy ? null : onSignIn,
+                      child: Text(
+                        'Sign In',
+                        style: TextStyle(
+                          color: SakuraColors.inkSoft,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
                         ),
                       ),
                     ),
                   ),
-                ),
-                if (widget.onCreateAccount != null) ...[
-                  const SizedBox(height: 4),
-                  TextButton(
-                    onPressed: (_guestBusy || _googleBusy)
-                        ? null
-                        : widget.onCreateAccount,
+                ],
+                const SizedBox(height: 4),
+                Entrance(
+                  delayMs: 520,
+                  child: TextButton(
+                    onPressed: busy ? null : _enterGuest,
                     child: Text(
-                      'Create a free account',
+                      _guestBusy ? 'Starting…' : 'Continue as Guest',
                       style: TextStyle(
-                        color: SakuraColors.primary,
+                        color: SakuraColors.inkFaint,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
                   ),
-                ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    'up to 3 tasks, no account needed',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: SakuraColors.inkFaint,
+                    ),
+                  ),
+                ),
                 if (_error != null) ...[
                   const SizedBox(height: 8),
                   Padding(
@@ -695,15 +692,23 @@ class _WelcomeGateState extends State<WelcomeGate>
                     child: Text(
                       _error!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.redAccent,
+                      style: TextStyle(
+                        // Theme error colour (M3 seed) instead of a hardcoded
+                        // redAccent that failed AA contrast on Edo and was
+                        // invisible-ish on Midnight.
+                        color: Theme.of(context).colorScheme.error,
                         fontSize: 13,
                         height: 1.4,
                       ),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  TextButton(
+                    onPressed: () => setState(() => _error = null),
+                    child: const Text('Try again'),
+                  ),
                 ],
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
                   'Free · No credit card · Your data stays yours',
                   textAlign: TextAlign.center,
@@ -713,16 +718,16 @@ class _WelcomeGateState extends State<WelcomeGate>
                     letterSpacing: 0.3,
                   ),
                 ),
-                const SizedBox(height: 24),
-              ],
+                const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
       ],
     ),
-  ),
   );
   }
 }
@@ -784,53 +789,69 @@ class _ValueBullets extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final item in _items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: SakuraColors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(item.icon,
-                      size: 18, color: SakuraColors.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: SakuraColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: SakuraColors.inkSoft,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: SakuraColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: SakuraColors.cardBorder.withValues(alpha: 0.30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: SakuraColors.ink.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
-      ],
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: Column(
+        children: [
+          for (final item in _items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: SakuraColors.primary.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(item.icon,
+                        size: 18, color: SakuraColors.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: SakuraColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          item.subtitle,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: SakuraColors.inkSoft,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

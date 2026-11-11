@@ -10,6 +10,7 @@ import '../data/simple_mode.dart';
 import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/bloom_mark.dart';
 import '../widgets/motion.dart';
 
 /// First-launch onboarding — three calm slides that explain the loop
@@ -152,21 +153,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       backgroundColor: SakuraColors.background,
       body: Stack(
         children: [
-          // Soft brand glow behind the slides.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -0.3),
-            radius: 1.1,
-            colors: [
-              SakuraColors.primary.withValues(alpha: 0.06),
-              SakuraColors.background,
-            ],
-          ),
-              ),
-            ),
-          ),
           Entrance(
             delayMs: 80,
             child: SafeArea(
@@ -175,17 +161,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ValueListenableBuilder<int>(
               valueListenable: _pageNotifier,
               builder: (context, page, _) {
-                return Align(
-                  alignment: Alignment.topRight,
-                  child: page < 3
-                      ? TextButton(
-                          onPressed: () => _finish(personalize: false),
-                          child: Text(
-                            'Skip',
-                            style: TextStyle(color: SakuraColors.inkSoft),
-                          ),
-                        )
-                      : const SizedBox(height: 40),
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: page < 3
+                        ? TextButton(
+                            onPressed: () => _finish(personalize: false),
+                            child: Text(
+                              'Skip',
+                              style: TextStyle(
+                                color: SakuraColors.inkFaint,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : const SizedBox(height: 40),
+                  ),
                 );
               },
             ),
@@ -195,9 +187,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 builder: (context, page, _) {
                   return AnimatedSwitcher(
                     duration: AppMotion.pageTurn,
+                    // New slides come in from the right, the old one
+                    // leaves to the left. AnimatedSwitcher plays the old
+                    // child's animation in reverse, so its begin offset has
+                    // to be negative — otherwise both pages fly in from the
+                    // same edge and cross over each other.
                     transitionBuilder: (child, animation) {
+                      final childPage = (child.key as ValueKey<int>?)?.value;
+                      final outgoing = childPage != null && childPage != page;
                       final tween = Tween<Offset>(
-                          begin: const Offset(1.15, 0), end: Offset.zero);
+                        begin: Offset(outgoing ? -1.15 : 1.15, 0),
+                        end: Offset.zero,
+                      );
                       return SlideTransition(
                         position: tween.animate(
                           CurvedAnimation(
@@ -237,7 +238,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 );
               }),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             ValueListenableBuilder<int>(
               valueListenable: _pageNotifier,
               builder: (context, page, _) {
@@ -268,7 +269,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
           ],
         ),
       ),
@@ -309,45 +310,48 @@ class _Slide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
+    // Scrollable with a centred min-height: tall slides (the heatmap, long
+    // titles) and large text scales scroll instead of overflowing the short
+    // viewport between the Skip row and the dots. The max width keeps line
+    // lengths readable on tablets and desktop.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: Align(
+            alignment: Alignment.center,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 380,
+                minHeight: (constraints.maxHeight - 16).clamp(0.0, 1e6),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
           Container(
-            padding: const EdgeInsets.all(26),
+            width: 88,
+            height: 88,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  SakuraColors.primary.withValues(alpha: 0.18),
-                  SakuraColors.primary.withValues(alpha: 0.04),
-                ],
+              color: SakuraColors.surface,
+              border: Border.all(
+                color: SakuraColors.primary.withValues(alpha: 0.16),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: SakuraColors.primary.withValues(alpha: 0.15),
-                  blurRadius: 20,
-                  spreadRadius: 1,
+                  color: SakuraColors.ink.withValues(alpha: 0.06),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: SakuraColors.background.withValues(alpha: 0.6),
-                border: Border.all(
-                  color: SakuraColors.primary.withValues(alpha: 0.25),
-                  width: 1.2,
-                ),
-              ),
+            child: Center(
               child: useLogo
-                  ? Image.asset('assets/logo.png', width: 40, height: 40, fit: BoxFit.contain)
-                  : Icon(icon, size: 44, color: SakuraColors.primary),
+                  ? const BloomMark(size: 48)
+                  : Icon(icon, size: 38, color: SakuraColors.primary),
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
           if (showHeatmap) ...[
             Semantics(
               label: 'Contribution heatmap preview',
@@ -368,14 +372,14 @@ class _Slide extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
           ],
           Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 22,
-              height: 1.25,
+              fontSize: 23,
+              height: 1.3,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.4,
               color: SakuraColors.ink,
@@ -391,8 +395,12 @@ class _Slide extends StatelessWidget {
               color: SakuraColors.inkSoft,
             ),
           ),
-        ],
-      ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -437,14 +445,21 @@ class _PersonalizeStep extends StatelessWidget {
 
   Widget _chip(BuildContext context, int i) {
     final active = i == focusIndex;
-    return GestureDetector(
-      onTap: () => onFocus(i),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: AppMotion.nav,
-        curve: AppMotion.tapCurve,
-        margin: const EdgeInsets.only(right: 8, bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    return Semantics(
+      button: true,
+      selected: active,
+      label: labels[i],
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => onFocus(i),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: AppMotion.nav,
+          curve: AppMotion.tapCurve,
+          margin: const EdgeInsets.only(right: 8, bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          constraints: const BoxConstraints(minHeight: 48),
+          alignment: Alignment.center,
         decoration: BoxDecoration(
           color: active
               ? SakuraColors.primary.withValues(alpha: 0.14)
@@ -454,12 +469,13 @@ class _PersonalizeStep extends StatelessWidget {
               color:
                   active ? SakuraColors.primary : SakuraColors.cardBorder),
         ),
-        child: Text(
-          labels[i],
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-            color: active ? SakuraColors.primary : SakuraColors.inkSoft,
+          child: Text(
+            labels[i],
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+              color: active ? SakuraColors.primary : SakuraColors.inkSoft,
+            ),
           ),
         ),
       ),
@@ -507,9 +523,13 @@ class _PersonalizeStep extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           const SizedBox(height: 8),
           Text(
             'Make it yours',
@@ -586,7 +606,9 @@ class _PersonalizeStep extends StatelessWidget {
             onChanged: onSimple,
           ),
           const SizedBox(height: 12),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

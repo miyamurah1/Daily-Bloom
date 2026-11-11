@@ -173,6 +173,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     // Repository: optimistic + offline-safe (queued when offline).
     if (mounted) setState(() => _task = _task.copyWith(status: next));
     await TaskRepository.instance.moveTask(_task.id, next);
+    final updated = TaskRepository.instance.tasks
+        .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+    if (mounted) setState(() => _task = updated);
     await _load(); // timeline gains a 'status' row
   }
 
@@ -183,6 +186,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final next = !s.done;
     AppHaptics.tap();
     await TaskRepository.instance.setSubtaskDone(s.id, next);
+    final updated = TaskRepository.instance.tasks
+        .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+    if (mounted) setState(() => _task = updated);
     await _load();
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -224,6 +230,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   Future<void> _deleteSub(Subtask s) async {
     await TaskRepository.instance.deleteSubtask(s.id);
+    final updated = TaskRepository.instance.tasks
+        .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+    if (mounted) setState(() => _task = updated);
     await _load();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -297,6 +306,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       for (final s in picked) {
         await TaskRepository.instance.createSubtask(_task.id, s.title);
       }
+      final updated = TaskRepository.instance.tasks
+          .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+      if (mounted) setState(() => _task = updated);
       await _load();
     } finally {
       if (mounted) setState(() => _breaking = false);
@@ -573,6 +585,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     // Repository: optimistic + queued offline.
     await TaskRepository.instance
         .reorderSubtasks(_task.id, items.map((s) => s.id).toList());
+    final updated = TaskRepository.instance.tasks
+        .firstWhere((t) => t.id == _task.id, orElse: () => _task);
+    if (mounted) setState(() => _task = updated);
     await _load();
   }
 

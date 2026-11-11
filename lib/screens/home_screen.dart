@@ -1852,8 +1852,6 @@ class _HomeScreenState extends State<HomeScreen> {
              ),
            ),
            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-           SliverToBoxAdapter(child: _todayFlowBlock()),
-           const SliverToBoxAdapter(child: SizedBox(height: 12)),
            // First-week arc: shows in both modes (first-week guide, not power tool).
           SliverToBoxAdapter(
             child: Padding(
@@ -1985,6 +1983,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
           ],
+          const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          SliverToBoxAdapter(child: _todayFlowBlock()),
           if (_showGuide)
             SliverToBoxAdapter(
               child: Padding(
@@ -2026,14 +2026,12 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
               child: Container(key: _intentionKey, child: _bentoHeader()),
             ),
-            const SizedBox(height: 12),
-            _todayFlowBlock(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _arcRow(),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -2055,22 +2053,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _miniHud(),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: QuickLinks(key: ValueKey('home_quick_links'))),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _collapsibleHeat(),
             ),
             if (!SimpleMode.instance.enabled) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: _plannerCard(),
@@ -2083,6 +2081,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               const SizedBox(height: 8),
             ],
+            const SizedBox(height: 16),
+            _todayFlowBlock(),
             if (_showGuide)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),

@@ -313,20 +313,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    // Guest mode has no session to end and its data lives only here, so the
+    // two exits must behave very differently: logging a guest out must not
+    // silently delete the tasks the dialog says will be kept.
+    final guest = TaskRepository.instance.guestMode;
     final yes = await showBloomConfirm(
       context,
-      title: 'Log out?',
-      message: 'You will return to the welcome screen. Your local data stays on this device.',
+      title: guest ? 'Leave guest mode?' : 'Log out?',
+      message: guest
+          ? 'Your guest tasks stay on this device, so you can pick them up '
+              'again by continuing as a guest. Create a free account to keep '
+              'them across devices.'
+          : 'You will return to the welcome screen. This device is cleared '
+              'for the next account — your work stays safe in the cloud.',
       cancelLabel: 'Cancel',
-      confirmLabel: 'Log out',
+      confirmLabel: guest ? 'Leave' : 'Log out',
     );
     if (!yes || !mounted) return;
+
+    if (guest) {
+      // Keep GuestStore + its onboarding flag: the tasks are the guest's
+      // only copy. Just stop being a guest and return to the welcome gate.
+      await TaskRepository.instance.setGuestMode(false);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('bloom_guest_mode_v1', false);
+      } catch (_) {}
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+
     ThemeStore.instance.resetToDefault();
     // Drop this account's due alarms: they reference tasks that no
     // longer belong on this device.
     await ReminderService.instance.cancelAllTaskReminders();
-    // Exit guest mode too, so a guest tapping Log out actually returns to
-    // the welcome gate instead of staying in the guest shell.
     await TaskRepository.instance.setGuestMode(false);
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -834,6 +855,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       listenable: Listenable.merge([AuthStore.instance, ThemeStore.instance]),
       builder: (context, _) {
         final user = AuthStore.instance.user;
+        // Guests have no account behind the session, so account-only
+        // controls are hidden rather than left to fail against the API.
+        final guest = TaskRepository.instance.guestMode;
         return Scaffold(
       backgroundColor: SakuraColors.background,
       appBar: AppBar(
@@ -889,9 +913,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user?.displayName.isNotEmpty == true
-                            ? user!.displayName
-                            : 'Bloomer',
+                        guest
+                            ? 'Guest'
+                            : user?.displayName.isNotEmpty == true
+                                ? user!.displayName
+                                : 'Bloomer',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -899,7 +925,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.w700,
                             color: SakuraColors.ink),
                       ),
-                      Align(
+                      if (!guest)
+                        Align(
                         alignment: Alignment.centerLeft,
                         child: Tooltip(
                           message: 'Edit profile',
@@ -924,7 +951,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        user?.email ?? '',
+                        guest
+                            ? 'Your work stays on this device'
+                            : (user?.email ?? ''),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -973,26 +1002,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: _logout,
                   icon: const Icon(LucideIcons.logOut,
                       size: 15),
-                  label: const Text('Log out',
-                      style: TextStyle(
+                  label: Text(guest ? 'Leave guest mode' : 'Log out',
+                      style: const TextStyle(
                           fontWeight: FontWeight.w700)),
                 ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  style: _actionStyle,
-                  onPressed: _exporting ? null : _export,
-                  icon: _exporting
-                      ? const SizedBox(
-                          height: 15,
-                          width: 15,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2))
-                      : const Icon(LucideIcons.download,
-                          size: 15),
-                  label: const Text('Export my data',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700)),
-                ),
+                // Server-side export needs a real account.
+                if (!guest) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    style: _actionStyle,
+                    onPressed: _exporting ? null : _export,
+                    icon: _exporting
+                        ? const SizedBox(
+                            height: 15,
+                            width: 15,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2))
+                        : const Icon(LucideIcons.download,
+                            size: 15),
+                    label: const Text('Export my data',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   style: _actionStyle,
@@ -1529,7 +1561,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                ],
              ),
            ),
-           const SizedBox(height: 14),
+           // Deleting an account requires one; guests never see this.
+          if (!guest) ...[
+          const SizedBox(height: 14),
            Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1594,10 +1628,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          ],
           const SizedBox(height: 20),
           Center(
             child: Text(
-              'Daily Bloom 1.0.0 · your data stays yours —\nexport or delete it anytime.',
+              guest
+                  ? 'Daily Bloom 1.0.0 · your data stays on this device.'
+                  : 'Daily Bloom 1.0.0 · your data stays yours —\nexport or delete it anytime.',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 11,

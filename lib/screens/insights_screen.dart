@@ -4,8 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/ai_client.dart';
 import '../data/api_client.dart';
-import '../data/auth_store.dart';
+import '../data/guest_store.dart';
+import '../data/task_repository.dart';
+import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/bloom_mark.dart';
+import '../widgets/motion.dart';
 
 /// Phase D — personal feedback. Numbers from `/api/insights` turned
 /// into plain-language patterns by [buildInsights] (rule-based, no ML).
@@ -25,11 +29,20 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Insights? _data;
   bool _loading = true;
   bool _offline = false;
+  bool _guestMode = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    // Guests have no server-side garden. Calling the API from here would
+    // throw an auth error, and the old catch left _loading true — the tab
+    // then showed a spinner forever. Show the guest explanation instead.
+    _guestMode = TaskRepository.instance.guestMode;
+    if (_guestMode) {
+      _loading = false;
+    } else {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -41,9 +54,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
         _loading = false;
         _offline = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      if (e is AuthExpiredException) return;
+      // Expired sessions land here too. Leaving _loading true was the
+      // infinite-spinner bug (signed-out / guest users saw a blank tab).
       // Trust rule: the card below IS the message — no snackbar spam.
       setState(() {
         _data = null;
@@ -55,6 +69,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final reduce = AppMotion.reduced(context);
     final data = _data;
     final tips = data == null ? <String>[] : buildInsights(data);
     final maxFocus = data == null || data.focusDays.isEmpty
@@ -112,8 +127,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ],
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
+      body: _guestMode
+          ? const _GuestInsights()
+          : _loading
+          ? const _InsightsSkeleton()
           : _offline
               ? RefreshIndicator(
                   onRefresh: _load,
@@ -176,14 +193,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
                           Expanded(
                               child: _Stat(
                                   label: 'FOCUS 7D',
-                                  value:
-                                      '${data.focusMinutes7}m')),
+                                  value: data.focusMinutes7,
+                                  suffix: 'm')),
                           const SizedBox(width: 12),
                           Expanded(
                               child: _Stat(
                                   label: 'STREAK',
-                                  value:
-                                      '${data.streakCurrent}d')),
+                                  value: data.streakCurrent,
+                                  suffix: 'd')),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -392,25 +409,33 @@ class _InsightsScreenState extends State<InsightsScreen> {
                                             ),
                                             const SizedBox(
                                                 height: 4),
-                                            Container(
-                                              height: h,
-                                              margin:
-                                                  const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal:
-                                                          4),
-                                              decoration:
-                                                  BoxDecoration(
-                                                color: d.minutes ==
-                                                        0
-                                                    ? SakuraColors
-                                                        .heat0
-                                                    : SakuraColors
-                                                        .primary,
-                                                borderRadius:
-                                                    BorderRadius
-                                                        .circular(
-                                                            6),
+                                            TweenAnimationBuilder<
+                                                double>(
+                                              tween: Tween<double>(
+                                                  begin: 0, end: h),
+                                              duration: reduce
+                                                  ? Duration.zero
+                                                  : AppMotion.progress,
+                                              curve:
+                                                  AppMotion.progressCurve,
+                                              builder:
+                                                  (context, value, _) =>
+                                                      Container(
+                                                height: value,
+                                                margin:
+                                                    const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 4),
+                                                decoration:
+                                                    BoxDecoration(
+                                                  color: d.minutes == 0
+                                                      ? SakuraColors.heat0
+                                                      : SakuraColors
+                                                          .primary,
+                                                  borderRadius:
+                                                      BorderRadius
+                                                          .circular(6),
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(
@@ -443,8 +468,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
 class _Stat extends StatelessWidget {
   final String label;
-  final String value;
-  const _Stat({required this.label, required this.value});
+  final int value;
+  final String suffix;
+  const _Stat({
+    required this.label,
+    required this.value,
+    this.suffix = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -463,8 +493,9 @@ class _Stat extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            value,
+          AnimatedInt(
+            value: value,
+            formatter: (v) => '$v$suffix',
             style: TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -599,12 +630,18 @@ class _NarrativeCardState extends State<_NarrativeCard> {
               ),
             )
           else
-            Text(
-              _text ?? '',
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.55,
-                color: SakuraColors.ink,
+            AnimatedSwitcher(
+              duration: AppMotion.toggle,
+              switchInCurve: AppMotion.toggleCurve,
+              switchOutCurve: AppMotion.toggleCurve,
+              child: Text(
+                _text ?? '',
+                key: ValueKey<String>(_text ?? ''),
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.55,
+                  color: SakuraColors.ink,
+                ),
               ),
             ),
           const SizedBox(height: 8),
@@ -618,6 +655,216 @@ class _NarrativeCardState extends State<_NarrativeCard> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Skeleton for the first load: shimmering cards instead of a bare
+/// spinner, staggered so the tab feels alive while the API answers.
+class _InsightsSkeleton extends StatelessWidget {
+  const _InsightsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: const [
+        Entrance(
+          delayMs: 0,
+          child: Row(
+            children: [
+              Expanded(child: ShimmerLoading(height: 96, radius: 20)),
+              SizedBox(width: 12),
+              Expanded(child: ShimmerLoading(height: 96, radius: 20)),
+            ],
+          ),
+        ),
+        SizedBox(height: 12),
+        Entrance(
+          delayMs: 60,
+          child: ShimmerLoading(height: 150, radius: 20),
+        ),
+        SizedBox(height: 12),
+        Entrance(
+          delayMs: 120,
+          child: ShimmerLoading(height: 190, radius: 20),
+        ),
+        SizedBox(height: 12),
+        Entrance(
+          delayMs: 180,
+          child: ShimmerLoading(height: 140, radius: 20),
+        ),
+      ],
+    );
+  }
+}
+
+/// Guest Insights: there is no account to analyse, so explain what would
+/// unlock and show the guest's own local progress instead of an error.
+class _GuestInsights extends StatelessWidget {
+  const _GuestInsights();
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = GuestStore.instance.tasks;
+    final done = tasks.where((t) => t['done'] == true).length;
+    final reduce = AppMotion.reduced(context);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        Entrance(
+          delayMs: 40,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Column(
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.86, end: 1),
+                  duration: reduce ? Duration.zero : AppMotion.entrance,
+                  curve: AppMotion.entranceCurve,
+                  builder: (context, s, child) =>
+                      Transform.scale(scale: s, child: child),
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: SakuraColors.background,
+                      border: Border.all(
+                        color:
+                            SakuraColors.primary.withValues(alpha: 0.16),
+                      ),
+                    ),
+                    child: const Center(child: BloomMark(size: 34)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Insights need a synced garden',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: SakuraColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "You're exploring as a guest, so charts, patterns and your "
+                  'weekly story are not available yet. Everything you plant is '
+                  'saved on this device — create a free account whenever you '
+                  'are ready to keep it everywhere.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.55,
+                    color: SakuraColors.inkSoft,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Entrance(
+          delayMs: 120,
+          child: Row(
+            children: [
+              Expanded(
+                  child: _Stat(label: 'PLANTED', value: tasks.length)),
+              const SizedBox(width: 12),
+              Expanded(child: _Stat(label: 'DONE', value: done)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Entrance(
+          delayMs: 180,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: SakuraTheme.cardDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'WHAT UNLOCKS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 2.2,
+                    fontWeight: FontWeight.w600,
+                    color: SakuraColors.inkFaint,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final item in const [
+                  (
+                    LucideIcons.barChart3,
+                    'Focus chart',
+                    'Minutes per day, at a glance'
+                  ),
+                  (
+                    LucideIcons.sparkles,
+                    'Patterns',
+                    'What is working, in plain language'
+                  ),
+                  (
+                    LucideIcons.bookOpen,
+                    'Weekly story',
+                    'A short look back at your week'
+                  ),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: SakuraColors.primary
+                                .withValues(alpha: 0.09),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(item.$1,
+                              size: 16, color: SakuraColors.primary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.$2,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: SakuraColors.ink,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.$3,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  height: 1.4,
+                                  color: SakuraColors.inkSoft,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -45,6 +45,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1600));
     await tester.pump(const Duration(milliseconds: 1600));
 
+    // Guest entry is the quiet tertiary action at the bottom of the page,
+    // so scroll it into view the way a user would before tapping.
+    await tester.ensureVisible(find.text('Continue as Guest'));
+    await tester.pump();
     await tester.tap(find.text('Continue as Guest'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));

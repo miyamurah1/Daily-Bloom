@@ -79,7 +79,11 @@ class _FlowCanvasScreenState extends State<FlowCanvasScreen> {
         final i = subs.indexWhere((x) => x.id == s.id);
         if (i == -1) return t;
         final updated = [...subs];
-        updated[i] = subs[i].copyWith(done: done);
+        updated[i] = subs[i].copyWith(
+          done: done,
+          completedAt: done ? DateTime.now() : null,
+          clearCompleted: !done,
+        );
         return t.copyWith(subtasks: updated);
       }).toList();
     });
