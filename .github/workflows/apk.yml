@@ -33,6 +33,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pin to the SDK the app is validated against. Newer stable
+          # releases (3.50+) deprecate package:flutter/material.dart, which
+          # makes `flutter analyze` fail on infos before the build can run.
+          flutter-version: '3.44.6'
       # firebase_options.dart is gitignored. CI builds it from secrets when
       # present, else CI-STUB (offline mode: auth fails closed by design).
       - name: Generate Firebase options stub if missing
