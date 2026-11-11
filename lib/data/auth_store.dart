@@ -374,8 +374,8 @@ class AuthStore extends ChangeNotifier {
           // no audience and Firebase rejects the credential.
           throw const AuthException(
             'Google sign-in is not configured for this build. '
-            'Register this app’s SHA-1 in Firebase Console, add '
-            'google-services.json, then rebuild.',
+            'Add this app\'s signing SHA-1/SHA-256 in Firebase, confirm the '
+            'Android OAuth client for com.dailybloom.app, then rebuild.',
           );
         }
         final credential = GoogleAuthProvider.credential(
@@ -390,8 +390,30 @@ class AuthStore extends ChangeNotifier {
       return true;
     } on FirebaseAuthException catch (e) {
       throw AuthException(_firebaseMsg(e));
-    } catch (_) {
-      throw const AuthException('Google sign-in failed — try again');
+    } on AuthException {
+      rethrow;
+    } on PlatformException catch (e) {
+      final code = e.code.toLowerCase();
+      final msg = (e.message ?? '').toLowerCase();
+      if (code == 'sign_in_failed' &&
+          (msg.contains('10') || msg.contains('developer_error'))) {
+        throw const AuthException(
+          'Google sign-in failed (DEVELOPER_ERROR). Check Firebase Android '
+          'app config and register this APK signing SHA-1/SHA-256 for '
+          'com.dailybloom.app, then rebuild.',
+        );
+      }
+      if (code == 'network_error') {
+        throw const AuthException(
+          'Google sign-in failed — check your internet connection and try again.',
+        );
+      }
+      if (code == 'sign_in_canceled') return false;
+      final detail = e.message ?? e.code;
+      throw AuthException('Google sign-in failed ($detail).');
+    } catch (e) {
+      final detail = e.toString();
+      throw AuthException('Google sign-in failed: $detail');
     }
   }
 
