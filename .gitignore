@@ -73,3 +73,6 @@ android/key.properties
 
 # Golden test failure artifacts (never commit diff PNGs)
 test/failures/
+
+# Downloaded CI artifacts (APKs pulled for on-device testing)
+artifacts/
