@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../firebase_options.dart';
+import 'auth_store.dart';
+
 /// TEMPORARY DIAGNOSTICS: what the installed build actually declares, so the
 /// package id and signing-certificate SHA-1 can be compared with the Android
 /// OAuth client in Firebase without adb. Remove once sign-in works.
@@ -25,9 +28,19 @@ class BuildDiagnostics {
     } catch (e) {
       debugPrint('[diag] signing info failed: ${e.runtimeType}: $e');
     }
+    // The baked values this build actually uses — the things the Firebase
+    // console must match.
+    final options = DefaultFirebaseOptions.currentPlatform;
     final init = firebaseInitError;
-    final text = 'pkg $packageName\nSHA-1 $sha1'
-        '${init == null ? '' : '\nfirebase init: $init'}';
+    final lines = [
+      'pkg $packageName',
+      'SHA-1 $sha1',
+      'project ${options.projectId}',
+      'appId ${options.appId}',
+      'webClient ${AuthStore.googleWebClientId}',
+      if (init != null) 'firebase init: $init',
+    ];
+    final text = lines.join('\n');
     debugPrint('[diag] $text');
     return text;
   }

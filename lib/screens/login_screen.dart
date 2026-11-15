@@ -586,7 +586,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 18),
                           SelectableText(
                             _buildInfo!,
-                            textAlign: TextAlign.center,
+                            textAlign: TextAlign.start,
                             style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 10.5,
