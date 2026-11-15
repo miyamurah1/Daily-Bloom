@@ -5,6 +5,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 
 import '../data/api_client.dart';
 import '../data/auth_store.dart';
+import '../data/build_diagnostics.dart';
 import '../data/haptics.dart';
 import '../data/session_sound.dart';
 import '../data/tap_sound.dart';
@@ -35,6 +36,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _googleBusy = false;
   bool _appleBusy = false;
   String? _error;
+  // TEMPORARY DIAGNOSTICS: package + signing SHA-1 of this install.
+  String? _buildInfo;
 
   bool get _appleAvailable =>
       defaultTargetPlatform == TargetPlatform.iOS ||
@@ -51,6 +54,9 @@ class _LoginScreenState extends State<LoginScreen> {
           _email.text.isEmpty) {
         setState(() => _email.text = address);
       }
+    });
+    BuildDiagnostics.describe().then((text) {
+      if (mounted) setState(() => _buildInfo = text);
     });
   }
 
@@ -574,6 +580,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         // (Forgot password lives directly under the
                         // password field above — one tap away, never
                         // buried under the fold.)
+                        // TEMPORARY DIAGNOSTICS: compare with the Firebase
+                        // Android OAuth client while Google sign-in is broken.
+                        if (_buildInfo != null) ...[
+                          const SizedBox(height: 18),
+                          SelectableText(
+                            _buildInfo!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 10.5,
+                              height: 1.5,
+                              color: SakuraColors.inkFaint,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

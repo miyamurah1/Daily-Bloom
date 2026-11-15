@@ -11,6 +11,7 @@ import 'data/background_music.dart';
 import 'data/tap_sound.dart';
 import 'data/api_client.dart';
 import 'data/auth_store.dart';
+import 'data/build_diagnostics.dart';
 import 'data/crash_reports.dart';
 import 'data/energy_store.dart';
 import 'data/privacy_preferences.dart';
@@ -29,7 +30,16 @@ void main() async {
   try {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
-  } catch (_) {}
+  } on FirebaseException catch (e) {
+    // TEMPORARY DIAGNOSTICS: a failed init is why Google sign-in dies later,
+    // so record the reason where the login screen can show it (no adb).
+    BuildDiagnostics.firebaseInitError = '${e.code}: ${e.message}';
+    debugPrint('[firebase] initializeApp failed: code=${e.code} '
+        'message=${e.message} plugin=${e.plugin}');
+  } catch (e) {
+    BuildDiagnostics.firebaseInitError = '${e.runtimeType}: $e';
+    debugPrint('[firebase] initializeApp failed: ${e.runtimeType}: $e');
+  }
 
   // First-frame-critical restores — all independent SharedPreferences
   // reads plus the font warm-up, run CONCURRENTLY. Serial awaits used
