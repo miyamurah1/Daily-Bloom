@@ -7,6 +7,12 @@ on:
         description: 'Backend URL baked into the APK (BLOOM_API)'
         required: false
         default: 'https://daily-bloom-api.onrender.com'
+      build_name:
+        description: 'Version name for this build (default: pubspec version)'
+        required: false
+      build_number:
+        description: 'Version code for this build; must increase per install (default: pubspec +N)'
+        required: false
   push:
     tags:
       - 'v*'
@@ -18,6 +24,14 @@ jobs:
       # Render derives the public URL from the service name in render.yaml.
       # Manual runs can override it with workflow_dispatch -> api_url.
       API_URL: ${{ inputs.api_url || 'https://daily-bloom-api.onrender.com' }}
+      # Non-secret expectations for the verification gates. Deliberately NOT
+      # populated from secrets: GitHub masks any log line containing a secret
+      # value, which turned these gate messages into "***" and made the build
+      # log unreadable.
+      EXPECTED_SIGNER_SHA1: '22D641627F121F81C7DA0B9EE97EAFB8D577C305'
+      EXPECTED_FIREBASE_PROJECT: 'daily-bloom-6aca1'
+      EXPECTED_ANDROID_APP_ID: '1:789612027996:android:120c7517d18fb54ec28699'
+      EXPECTED_WEB_CLIENT_ID: '789612027996-nri9p33e5djdd56atjmlqou5fi9mcq9o.apps.googleusercontent.com'
     steps:
       - uses: actions/checkout@v4
       - name: Guard against an empty backend URL
@@ -157,13 +171,20 @@ jobs:
             exit 1
           fi
       - run: flutter analyze
-      - run: >
-           flutter build apk --release
-           --dart-define=BLOOM_API=${{ env.API_URL }}
+      - name: Build release APK
+        env:
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          FLAGS=""
+          if [ -n "$BUILD_NAME" ]; then FLAGS="$FLAGS --build-name=$BUILD_NAME"; fi
+          if [ -n "$BUILD_NUMBER" ]; then FLAGS="$FLAGS --build-number=$BUILD_NUMBER"; fi
+          flutter build apk --release $FLAGS --dart-define=BLOOM_API="$API_URL"
+          echo "Built $(grep -m1 '^version:' pubspec.yaml)${FLAGS:+ with overrides:$FLAGS}"
       - name: Verify APK signer certificate
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
-          EXPECTED=22D641627F121F81C7DA0B9EE97EAFB8D577C305
+          EXPECTED="$EXPECTED_SIGNER_SHA1"
           APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           echo "Signer of $APK (via $APKSIGNER):"
           CERTS=$("$APKSIGNER" verify --print-certs "$APK" 2>&1)
@@ -177,8 +198,8 @@ jobs:
       - name: Verify baked Firebase configuration
         run: |
           APK=build/app/outputs/flutter-apk/app-release.apk
-          EXPECTED_PROJECT=daily-bloom-6aca1
-          EXPECTED_APP_ID=1:789612027996:android:120c7517d18fb54ec28699
+          EXPECTED_PROJECT="$EXPECTED_FIREBASE_PROJECT"
+          EXPECTED_APP_ID="$EXPECTED_ANDROID_APP_ID"
           ENTRY=$(unzip -Z1 "$APK" | grep -m1 'libapp\.so$')
           SNAPSHOT=$(mktemp)
           unzip -p "$APK" "$ENTRY" > "$SNAPSHOT"
@@ -195,6 +216,21 @@ jobs:
           done
           rm -f "$SNAPSHOT"
           exit $STATUS
+      - name: Verify baked Google web client ID
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          ENTRY=$(unzip -Z1 "$APK" | grep -m1 'libapp\.so$')
+          SNAPSHOT=$(mktemp)
+          unzip -p "$APK" "$ENTRY" > "$SNAPSHOT"
+          echo "Baked Google client id(s): $(grep -a -o -E '[0-9]{6,}-[a-z0-9]+\.apps\.googleusercontent\.com' "$SNAPSHOT" | sort -u | tr '\n' ' ')"
+          if grep -a -q -F -- "$EXPECTED_WEB_CLIENT_ID" "$SNAPSHOT"; then
+            echo "OK: Google web client id $EXPECTED_WEB_CLIENT_ID"
+          else
+            echo "::error title=Missing Google web client ID::GoogleSignIn's serverClientId is not baked into this APK, so the ID token would have no audience. Check AuthStore.googleWebClientId."
+            rm -f "$SNAPSHOT"
+            exit 1
+          fi
+          rm -f "$SNAPSHOT"
       - uses: actions/upload-artifact@v4
         with:
           name: daily-bloom-apk
