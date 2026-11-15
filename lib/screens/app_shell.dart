@@ -443,7 +443,12 @@ class _EmailVerificationBannerState extends State<_EmailVerificationBanner> {
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
-        color: SakuraColors.primary.withValues(alpha: 0.09),
+        decoration: BoxDecoration(
+          color: SakuraColors.primary.withValues(alpha: 0.09),
+          border: Border(
+            bottom: BorderSide(color: SakuraColors.cardBorder),
+          ),
+        ),
         child: Row(
           children: [
             Icon(LucideIcons.mail, size: 16, color: SakuraColors.primary),
@@ -451,7 +456,7 @@ class _EmailVerificationBannerState extends State<_EmailVerificationBanner> {
             Expanded(
               child: Text(
                 _message ?? 'Verify your email to keep your account secure.',
-                style: TextStyle(fontSize: 12, color: SakuraColors.ink),
+                style: TextStyle(fontSize: 12.5, color: SakuraColors.ink, height: 1.3),
               ),
             ),
             TextButton(

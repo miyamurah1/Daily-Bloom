@@ -46,8 +46,8 @@ class SakuraBottomNav extends StatelessWidget {
             top: BorderSide(color: SakuraColors.cardBorder)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 20,
+            color: SakuraColors.ink.withValues(alpha: 0.12),
+            blurRadius: 18,
             offset: const Offset(0, -4),
           ),
         ],

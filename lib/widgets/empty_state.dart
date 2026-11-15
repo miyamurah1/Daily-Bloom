@@ -17,6 +17,10 @@ class EmptyState extends StatelessWidget {
   /// Optional action (e.g. 'New goal' button). If null, only informational.
   final Widget? action;
 
+  /// Icon shown above the title. Defaults to a neutral inbox icon so empty
+  /// states read consistently across screens.
+  final IconData icon;
+
   /// When true, swaps ink→primary for light backgrounds.
   final bool invert;
 
@@ -25,6 +29,7 @@ class EmptyState extends StatelessWidget {
     required this.title,
     this.subtitle = '',
     this.action,
+    this.icon = LucideIcons.inbox,
     this.invert = false,
   });
 
@@ -56,7 +61,7 @@ class EmptyState extends StatelessWidget {
                 Container(
                   width: 46,
                   height: 46,
-                  margin: const EdgeInsets.only(bottom: 12),
+                  margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
                     color: invert
                         ? SakuraColors.primary
@@ -64,14 +69,13 @@ class EmptyState extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    LucideIcons.file,
+                    icon,
                     size: 22,
                     color: invert
                         ? SakuraColors.primarySoft
                         : SakuraColors.primary,
                   ),
                 ),
-                const SizedBox(height: 12),
                 Text(
                   title,
                   textAlign: TextAlign.center,
