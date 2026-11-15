@@ -174,6 +174,27 @@ jobs:
             echo "::error title=Unexpected APK signer::APK is signed with ${SIGNER:-an unreadable certificate}, not $EXPECTED. Refusing to publish this artifact."
             exit 1
           fi
+      - name: Verify baked Firebase configuration
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          EXPECTED_PROJECT=daily-bloom-6aca1
+          EXPECTED_APP_ID=1:789612027996:android:120c7517d18fb54ec28699
+          ENTRY=$(unzip -Z1 "$APK" | grep -m1 'libapp\.so$')
+          SNAPSHOT=$(mktemp)
+          unzip -p "$APK" "$ENTRY" > "$SNAPSHOT"
+          echo "Baked Android app id(s): $(grep -a -o -E '1:[0-9]{6,}:android:[a-f0-9]+' "$SNAPSHOT" | sort -u | tr '\n' ' ')"
+          STATUS=0
+          for pair in "project id:$EXPECTED_PROJECT" "Android app id:$EXPECTED_APP_ID"; do
+            LABEL=${pair%%:*}; VALUE=${pair#*:}
+            if grep -a -q -F -- "$VALUE" "$SNAPSHOT"; then
+              echo "OK: $LABEL $VALUE"
+            else
+              echo "::error title=Stale Firebase configuration::The APK was built without the expected $LABEL ($VALUE); check FIREBASE_PROJECT_ID / FIREBASE_APP_ID."
+              STATUS=1
+            fi
+          done
+          rm -f "$SNAPSHOT"
+          exit $STATUS
       - uses: actions/upload-artifact@v4
         with:
           name: daily-bloom-apk
