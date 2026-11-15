@@ -10,6 +10,7 @@ import '../data/session_sound.dart';
 import '../data/tap_sound.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
+import '../widgets/auth_error_banner.dart';
 import '../widgets/google_button.dart';
 import '../widgets/apple_button.dart';
 import '../widgets/motion.dart';
@@ -465,13 +466,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
 
-                            if (_error != null) ...[
-                              const SizedBox(height: 4),
-                              Text(_error!,
-                                  style: const TextStyle(
-                                      color: Color(0xFFD33A4E),
-                                      fontSize: 13)),
-                            ],
+                            if (_error != null)
+                              AuthErrorBanner(message: _error!),
                             const SizedBox(height: 16),
 
                             // Log in button

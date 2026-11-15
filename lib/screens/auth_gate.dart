@@ -9,6 +9,7 @@ import '../data/task_repository.dart';
 import '../theme/app_motion.dart';
 import '../theme/sakura_theme.dart';
 import '../widgets/bloom_mark.dart';
+import '../widgets/auth_error_banner.dart';
 import '../widgets/google_button.dart';
 import '../widgets/motion.dart';
 import '../widgets/petal_rain.dart';
@@ -685,29 +686,14 @@ class _WelcomeGateState extends State<WelcomeGate>
                     ),
                   ),
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        // Theme error colour (M3 seed) instead of a hardcoded
-                        // redAccent that failed AA contrast on Edo and was
-                        // invisible-ish on Midnight.
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
+                if (_error != null)
+                  AuthErrorBanner(
+                    message: _error!,
+                    onRetry: () {
+                      setState(() => _error = null);
+                      _googleSignIn();
+                    },
                   ),
-                  const SizedBox(height: 6),
-                  TextButton(
-                    onPressed: () => setState(() => _error = null),
-                    child: const Text('Try again'),
-                  ),
-                ],
                 const SizedBox(height: 12),
                 Text(
                   'Free · No credit card · Your data stays yours',

@@ -91,6 +91,20 @@ class AuthStore extends ChangeNotifier {
   static GoogleSignIn _googleClient() =>
       GoogleSignIn(serverClientId: googleWebClientId);
 
+  /// TEMPORARY DIAGNOSTICS: one banner line carrying the raw platform code,
+  /// message and details. Remove with the logging in [signInWithGoogle].
+  static String _googleFailure(PlatformException e, String stage) {
+    final message = _clip((e.message ?? '').replaceAll('\n', ' ').trim(), 140);
+    final rawDetails = '${e.details ?? ''}'.replaceAll('\n', ' ').trim();
+    final details = _clip(rawDetails, 100);
+    final suffix = message.isEmpty ? '' : ': $message';
+    final extra = details.isEmpty ? '' : ' ($details)';
+    return 'Google $stage failed [${e.code}]$suffix$extra';
+  }
+
+  static String _clip(String value, int max) =>
+      value.length <= max ? value : '${value.substring(0, max)}…';
+
   static const String baseUrl = String.fromEnvironment(
     'BLOOM_API',
     defaultValue: 'http://localhost:8080',
@@ -366,17 +380,39 @@ class AuthStore extends ChangeNotifier {
         await FirebaseAuth.instance.signInWithPopup(provider);
       } else {
         // Mobile: use google_sign_in package.
-        final googleUser = await _googleClient().signIn();
+        GoogleSignInAccount? googleUser;
+        // TEMPORARY DIAGNOSTICS: log the raw platform failure at each stage so
+        // a device build can be diagnosed without adb. Remove with the
+        // diagnostics in the catch blocks below once sign-in is confirmed.
+        try {
+          googleUser = await _googleClient().signIn();
+        } on PlatformException catch (e) {
+          debugPrint('[auth] GoogleSignIn.signIn threw: code=${e.code} '
+              'message=${e.message} details=${e.details}');
+          throw AuthException(_googleFailure(e, 'account picker'));
+        }
         if (googleUser == null) return false; // User cancelled.
-        final googleAuth = await googleUser.authentication;
-        if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+        GoogleSignInAuthentication googleAuth;
+        try {
+          googleAuth = await googleUser.authentication;
+        } on PlatformException catch (e) {
+          debugPrint('[auth] GoogleSignIn.authentication threw: code=${e.code} '
+              'message=${e.message} details=${e.details}');
+          throw AuthException(_googleFailure(e, 'token request'));
+        }
+        final hasAccessToken = (googleAuth.accessToken ?? '').isNotEmpty;
+        final hasIdToken = (googleAuth.idToken ?? '').isNotEmpty;
+        debugPrint('[auth] Google tokens: accessToken=$hasAccessToken '
+            'idToken=$hasIdToken client=$googleWebClientId');
+        if (!hasAccessToken || !hasIdToken) {
           // Android misconfigured: no usable web client (no
           // google-services.json Android OAuth client), so the ID token has
           // no audience and Firebase rejects the credential.
-          throw const AuthException(
-            'Google sign-in is not configured for this build. '
-            'Add this app\'s signing SHA-1/SHA-256 in Firebase, confirm the '
-            'Android OAuth client for com.dailybloom.app, then rebuild.',
+          throw AuthException(
+            'Google returned no usable token (accessToken=$hasAccessToken, '
+            'idToken=$hasIdToken) for '
+            '${googleWebClientId.split('.').first}. The Android OAuth client '
+            'for this signing key is missing.',
           );
         }
         final credential = GoogleAuthProvider.credential(
@@ -390,31 +426,23 @@ class AuthStore extends ChangeNotifier {
       BloomAnalytics.login(method: 'google');
       return true;
     } on FirebaseAuthException catch (e) {
-      throw AuthException(_firebaseMsg(e));
+      debugPrint('[auth] FirebaseAuth rejected Google credential: '
+          'code=${e.code} message=${e.message}');
+      throw AuthException(
+        'Google sign-in rejected by Firebase [${e.code}]: ${_firebaseMsg(e)}',
+      );
     } on AuthException {
       rethrow;
     } on PlatformException catch (e) {
-      final code = e.code.toLowerCase();
-      final msg = (e.message ?? '').toLowerCase();
-      if (code == 'sign_in_failed' &&
-          (msg.contains('10') || msg.contains('developer_error'))) {
-        throw const AuthException(
-          'Google sign-in failed (DEVELOPER_ERROR). Check Firebase Android '
-          'app config and register this APK signing SHA-1/SHA-256 for '
-          'com.dailybloom.app, then rebuild.',
-        );
-      }
-      if (code == 'network_error') {
-        throw const AuthException(
-          'Google sign-in failed — check your internet connection and try again.',
-        );
-      }
-      if (code == 'sign_in_canceled') return false;
-      final detail = e.message ?? e.code;
-      throw AuthException('Google sign-in failed ($detail).');
+      debugPrint('[auth] Google sign-in platform failure: code=${e.code} '
+          'message=${e.message} details=${e.details}');
+      if (e.code.toLowerCase().contains('cancel')) return false;
+      throw AuthException(_googleFailure(e, 'sign-in'));
     } catch (e) {
-      final detail = e.toString();
-      throw AuthException('Google sign-in failed: $detail');
+      debugPrint('[auth] Google sign-in failed: ${e.runtimeType}: $e');
+      throw AuthException(
+        'Google sign-in failed: ${_clip('${e.runtimeType}: $e', 160)}',
+      );
     }
   }
 
